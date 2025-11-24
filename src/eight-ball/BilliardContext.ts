@@ -38,6 +38,7 @@ export class Ball {
   key = "ball-" + nanoid(6);
   color: string;
   position: Point = { x: 0, y: 0 };
+  angle: number = 0;
   radius: number;
 
   constructor(position: { x: number; y: number }, radius: number, color: string) {

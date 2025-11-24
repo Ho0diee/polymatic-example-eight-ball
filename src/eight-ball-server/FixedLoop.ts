@@ -9,7 +9,7 @@ export interface FrameLoopEvent {
  * Implements fixed-time game loop. It sends frame-loop event to all middlewares in each frame.
  */
 export class NodeFrameLoop extends Middleware {
-  timeStep = 1000 / 20;
+  timeStep = 1000 / 60;
   interval: any;
 
   // reuse object

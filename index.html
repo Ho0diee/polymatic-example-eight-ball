@@ -12,11 +12,52 @@
 
 <body>
   <svg id="polymatic-eight-ball" class="terminal"></svg>
-  <div style="position: absolute; top: 0.5em; left: 0.5em;">
+  
+  <!-- Top Bar -->
+  <div id="top-bar">
+    <div class="player-section">
+      <div class="avatar"></div>
+      <div class="player-info">
+        <span class="name">Player</span>
+        <div class="progress-bar"><div class="fill" style="width: 70%"></div></div>
+      </div>
+    </div>
+    <div class="game-title">8-Ball</div>
+    <div class="player-section opponent">
+      <div class="player-info">
+        <span class="name">Rarer</span>
+        <div class="progress-bar"><div class="fill" style="width: 40%"></div></div>
+      </div>
+      <div class="avatar"></div>
+    </div>
+  </div>
+
+  <!-- Side Controls -->
+  <div id="controls-left">
+    <div class="power-bar-container">
+      <div class="power-bar"></div>
+      <div class="power-indicator" style="bottom: 50%"></div>
+    </div>
+  </div>
+
+  <div id="controls-right">
+    <div class="spin-control">
+      <div class="spin-circle">
+        <div class="spin-dot"></div>
+        <div class="spin-arrow top"></div>
+        <div class="spin-arrow right"></div>
+        <div class="spin-arrow bottom"></div>
+        <div class="spin-arrow left"></div>
+      </div>
+    </div>
+    <button id="smash-button">Smash</button>
+  </div>
+
+  <div style="position: absolute; top: 4em; left: 0.5em;">
     <div id="game-status"></div>
     <div id="room-status"></div>
   </div>
-  <div style="position: absolute; bottom: 0.5em; left: 0.5em;">
+  <div style="position: absolute; bottom: 0.5em; left: 0.5em; z-index: 10;">
     <button id="play-offline">Play Offline</button>
     <button id="create-room">Create Room</button>
     <button id="join-room">Join Room</button>  

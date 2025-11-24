@@ -12,7 +12,7 @@ export class Physics extends Middleware<BilliardContext> {
   world: World;
 
   time: number = 0;
-  timeStep = 1000 / 20;
+  timeStep = 1000 / 120;
 
   pocketedBalls: Ball[] = [];
 
@@ -135,6 +135,7 @@ export class Physics extends Middleware<BilliardContext> {
       // we only need three decimal position (millimeter) outside physics simulation
       data.position.x = ((p.x * 1000) | 0) / 1000;
       data.position.y = ((p.y * 1000) | 0) / 1000;
+      data.angle = body.getAngle();
     },
     exit: (data, body) => {
       this.world.destroyBody(body);
