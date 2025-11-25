@@ -201,26 +201,30 @@ body {
 
 /* Table Felt */
 .table {
-  fill: #0a4d2e; /* Deep Emerald Green */
-  /* Simulating felt texture with SVG filter would be ideal, but simple fill for now */
-  stroke: none;
+  fill: url(#felt-gradient);
+  stroke: #052e1a;
+  stroke-width: 0.008;
+  filter: drop-shadow(0 0.02px 0.03px rgba(0,0,0,0.6));
 }
 
 /* Rails */
 .rail {
-  fill: #3e2723; /* Mahogany */
-  stroke: #1a100e;
-  stroke-width: 0.01;
-  stroke-linejoin: round;
-  /* We can't easily do wood grain in CSS for SVG polygon fill without patterns, 
-     but we can add a filter or just rely on color */
+  stroke: #2a1a0a;
+  stroke-width: 0.006;
+  stroke-linejoin: miter;
+}
+
+/* Rail cushion (the green bumper part) */
+.rail-cushion {
+  fill: #0a5c32;
+  stroke: #073d22;
+  stroke-width: 0.002;
 }
 
 /* Pockets */
 .pocket {
   fill: #000;
-  stroke: #111;
-  stroke-width: 0.005;
+  stroke: none;
 }
 
 /* Cue Stick */
@@ -237,19 +241,20 @@ body {
 }
 
 .ball-circle {
-  stroke: rgba(0,0,0,0.3);
-  stroke-width: 0.002;
-  /* The fill will be handled by specific classes, but we want a 3D look */
+  stroke: rgba(0,0,0,0.5);
+  stroke-width: 0.003;
+  shape-rendering: geometricPrecision;
 }
 
 .ball-text {
-  font-family: sans-serif;
-  font-weight: bold;
+  font-family: 'Arial Black', sans-serif;
+  font-weight: 900;
   font-size: 0.025px; /* Adjust based on ball radius */
   fill: black;
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
+  shape-rendering: geometricPrecision;
 }
 
 /* Ball Colors & Gradients */
@@ -263,8 +268,9 @@ body {
 */
 
 .ball-highlight {
-  fill: white;
-  fill-opacity: 0.3;
+  fill: url(#ball-highlight-gradient);
+  fill-opacity: 1;
+  pointer-events: none;
 }
 
 /* Specific Ball Colors */

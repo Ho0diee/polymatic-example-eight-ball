@@ -44,10 +44,15 @@ class Quaternion {
     return this;
   }
 
+  conjugate() {
+    return new Quaternion(this.w, -this.x, -this.y, -this.z);
+  }
+
   rotateVector(v: { x: number; y: number; z: number }) {
+    // p' = q * p * q^-1
     const qv = new Quaternion(0, v.x, v.y, v.z);
-    const qConjugate = new Quaternion(this.w, -this.x, -this.y, -this.z);
-    const qResult = this.multiply(qv).multiply(qConjugate);
+    const qInv = this.conjugate();
+    const qResult = this.multiply(qv).multiply(qInv);
     return { x: qResult.x, y: qResult.y, z: qResult.z };
   }
 }
@@ -96,6 +101,9 @@ export class Terminal extends Middleware<BilliardContext> {
   handleActivate() {
     const svg = document.getElementById("polymatic-eight-ball");
     if (svg && svg instanceof SVGSVGElement) {
+      // Add gradient definitions
+      this.addSvgDefs(svg);
+      
       svg.appendChild(this.container);
       this.container.parentElement?.addEventListener("pointerdown", this.handlePointerDown);
       this.container.parentElement?.addEventListener("pointermove", this.handlePointerMove);
@@ -106,6 +114,235 @@ export class Terminal extends Middleware<BilliardContext> {
     } else {
       console.error("Container SVG element not found");
     }
+  }
+
+  addSvgDefs(svg: SVGSVGElement) {
+    // Check if defs already exist
+    if (svg.querySelector('defs#ball-defs')) return;
+
+    const defs = document.createElementNS(SVG_NS, "defs");
+    defs.id = "ball-defs";
+
+    // Ball highlight gradient - gives 3D glossy look
+    const highlightGradient = document.createElementNS(SVG_NS, "radialGradient");
+    highlightGradient.id = "ball-highlight-gradient";
+    highlightGradient.setAttribute("cx", "30%");
+    highlightGradient.setAttribute("cy", "30%");
+    highlightGradient.setAttribute("r", "70%");
+
+    const stop1 = document.createElementNS(SVG_NS, "stop");
+    stop1.setAttribute("offset", "0%");
+    stop1.setAttribute("stop-color", "white");
+    stop1.setAttribute("stop-opacity", "0.6");
+    highlightGradient.appendChild(stop1);
+
+    const stop2 = document.createElementNS(SVG_NS, "stop");
+    stop2.setAttribute("offset", "40%");
+    stop2.setAttribute("stop-color", "white");
+    stop2.setAttribute("stop-opacity", "0.1");
+    highlightGradient.appendChild(stop2);
+
+    const stop3 = document.createElementNS(SVG_NS, "stop");
+    stop3.setAttribute("offset", "100%");
+    stop3.setAttribute("stop-color", "black");
+    stop3.setAttribute("stop-opacity", "0.2");
+    highlightGradient.appendChild(stop3);
+
+    defs.appendChild(highlightGradient);
+
+    // Wood grain gradient for rails
+    const woodGradient = document.createElementNS(SVG_NS, "linearGradient");
+    woodGradient.id = "wood-grain";
+    woodGradient.setAttribute("x1", "0%");
+    woodGradient.setAttribute("y1", "0%");
+    woodGradient.setAttribute("x2", "100%");
+    woodGradient.setAttribute("y2", "100%");
+
+    const woodStops = [
+      { offset: "0%", color: "#5d3a1a" },
+      { offset: "20%", color: "#6b4423" },
+      { offset: "40%", color: "#4a2c12" },
+      { offset: "60%", color: "#6b4423" },
+      { offset: "80%", color: "#5d3a1a" },
+      { offset: "100%", color: "#4a2c12" },
+    ];
+    woodStops.forEach(({ offset, color }) => {
+      const stop = document.createElementNS(SVG_NS, "stop");
+      stop.setAttribute("offset", offset);
+      stop.setAttribute("stop-color", color);
+      woodGradient.appendChild(stop);
+    });
+    defs.appendChild(woodGradient);
+
+    // Felt texture gradient
+    const feltGradient = document.createElementNS(SVG_NS, "radialGradient");
+    feltGradient.id = "felt-gradient";
+    feltGradient.setAttribute("cx", "50%");
+    feltGradient.setAttribute("cy", "50%");
+    feltGradient.setAttribute("r", "70%");
+
+    const feltStop1 = document.createElementNS(SVG_NS, "stop");
+    feltStop1.setAttribute("offset", "0%");
+    feltStop1.setAttribute("stop-color", "#0d5c35");
+    feltGradient.appendChild(feltStop1);
+
+    const feltStop2 = document.createElementNS(SVG_NS, "stop");
+    feltStop2.setAttribute("offset", "100%");
+    feltStop2.setAttribute("stop-color", "#073d22");
+    feltGradient.appendChild(feltStop2);
+
+    defs.appendChild(feltGradient);
+
+    // Pocket gradient for depth - darker to match being cut into wood
+    const pocketGradient = document.createElementNS(SVG_NS, "radialGradient");
+    pocketGradient.id = "pocket-gradient";
+    pocketGradient.setAttribute("cx", "50%");
+    pocketGradient.setAttribute("cy", "50%");
+    pocketGradient.setAttribute("r", "50%");
+
+    const pocketStop1 = document.createElementNS(SVG_NS, "stop");
+    pocketStop1.setAttribute("offset", "0%");
+    pocketStop1.setAttribute("stop-color", "#000000");
+    pocketGradient.appendChild(pocketStop1);
+
+    const pocketStop2 = document.createElementNS(SVG_NS, "stop");
+    pocketStop2.setAttribute("offset", "70%");
+    pocketStop2.setAttribute("stop-color", "#000000");
+    pocketGradient.appendChild(pocketStop2);
+
+    const pocketStop3 = document.createElementNS(SVG_NS, "stop");
+    pocketStop3.setAttribute("offset", "100%");
+    pocketStop3.setAttribute("stop-color", "#1a1008");
+    pocketGradient.appendChild(pocketStop3);
+
+    defs.appendChild(pocketGradient);
+
+    // Horizontal rails (top/bottom) - grain runs along the length of the rail
+    const railHorizontal = document.createElementNS(SVG_NS, "linearGradient");
+    railHorizontal.id = "rail-horizontal";
+    railHorizontal.setAttribute("x1", "0%");
+    railHorizontal.setAttribute("y1", "0%");
+    railHorizontal.setAttribute("x2", "100%");
+    railHorizontal.setAttribute("y2", "0%");
+
+    // Wood grain - subtle variation along the length
+    const hGrainStops = [
+      { offset: "0%", color: "#5a3d2b" },
+      { offset: "10%", color: "#4e3222" },
+      { offset: "25%", color: "#5a3d2b" },
+      { offset: "40%", color: "#523828" },
+      { offset: "55%", color: "#5a3d2b" },
+      { offset: "70%", color: "#4e3222" },
+      { offset: "85%", color: "#5a3d2b" },
+      { offset: "100%", color: "#523828" },
+    ];
+    hGrainStops.forEach(({ offset, color }) => {
+      const stop = document.createElementNS(SVG_NS, "stop");
+      stop.setAttribute("offset", offset);
+      stop.setAttribute("stop-color", color);
+      railHorizontal.appendChild(stop);
+    });
+    defs.appendChild(railHorizontal);
+
+    // Vertical rails (left/right) - grain runs along the length of the rail
+    const railVertical = document.createElementNS(SVG_NS, "linearGradient");
+    railVertical.id = "rail-vertical";
+    railVertical.setAttribute("x1", "0%");
+    railVertical.setAttribute("y1", "0%");
+    railVertical.setAttribute("x2", "0%");
+    railVertical.setAttribute("y2", "100%");
+
+    // Wood grain - subtle variation along the length
+    const vGrainStops = [
+      { offset: "0%", color: "#5a3d2b" },
+      { offset: "10%", color: "#4e3222" },
+      { offset: "25%", color: "#5a3d2b" },
+      { offset: "40%", color: "#523828" },
+      { offset: "55%", color: "#5a3d2b" },
+      { offset: "70%", color: "#4e3222" },
+      { offset: "85%", color: "#5a3d2b" },
+      { offset: "100%", color: "#523828" },
+    ];
+    vGrainStops.forEach(({ offset, color }) => {
+      const stop = document.createElementNS(SVG_NS, "stop");
+      stop.setAttribute("offset", offset);
+      stop.setAttribute("stop-color", color);
+      railVertical.appendChild(stop);
+    });
+    defs.appendChild(railVertical);
+
+    // Metal dot gradient for decorative screws/inlays
+    const metalGradient = document.createElementNS(SVG_NS, "radialGradient");
+    metalGradient.id = "metal-dot";
+    metalGradient.setAttribute("cx", "35%");
+    metalGradient.setAttribute("cy", "35%");
+    metalGradient.setAttribute("r", "60%");
+
+    const metalStop1 = document.createElementNS(SVG_NS, "stop");
+    metalStop1.setAttribute("offset", "0%");
+    metalStop1.setAttribute("stop-color", "#b8c4d0");
+    metalGradient.appendChild(metalStop1);
+
+    const metalStop2 = document.createElementNS(SVG_NS, "stop");
+    metalStop2.setAttribute("offset", "50%");
+    metalStop2.setAttribute("stop-color", "#8090a0");
+    metalGradient.appendChild(metalStop2);
+
+    const metalStop3 = document.createElementNS(SVG_NS, "stop");
+    metalStop3.setAttribute("offset", "100%");
+    metalStop3.setAttribute("stop-color", "#506070");
+    metalGradient.appendChild(metalStop3);
+
+    defs.appendChild(metalGradient);
+
+    // Drop shadow filter for depth
+    const dropShadow = document.createElementNS(SVG_NS, "filter");
+    dropShadow.id = "drop-shadow";
+    dropShadow.setAttribute("x", "-20%");
+    dropShadow.setAttribute("y", "-20%");
+    dropShadow.setAttribute("width", "140%");
+    dropShadow.setAttribute("height", "140%");
+
+    const feDropShadow = document.createElementNS(SVG_NS, "feDropShadow");
+    feDropShadow.setAttribute("dx", "0");
+    feDropShadow.setAttribute("dy", "0.005");
+    feDropShadow.setAttribute("stdDeviation", "0.008");
+    feDropShadow.setAttribute("flood-color", "#000");
+    feDropShadow.setAttribute("flood-opacity", "0.5");
+    dropShadow.appendChild(feDropShadow);
+
+    defs.appendChild(dropShadow);
+
+    // Inner shadow for pockets
+    const innerShadow = document.createElementNS(SVG_NS, "filter");
+    innerShadow.id = "inner-shadow";
+    innerShadow.setAttribute("x", "-50%");
+    innerShadow.setAttribute("y", "-50%");
+    innerShadow.setAttribute("width", "200%");
+    innerShadow.setAttribute("height", "200%");
+
+    const feGaussian = document.createElementNS(SVG_NS, "feGaussianBlur");
+    feGaussian.setAttribute("in", "SourceAlpha");
+    feGaussian.setAttribute("stdDeviation", "0.005");
+    feGaussian.setAttribute("result", "blur");
+    innerShadow.appendChild(feGaussian);
+
+    const feOffset = document.createElementNS(SVG_NS, "feOffset");
+    feOffset.setAttribute("in", "blur");
+    feOffset.setAttribute("dx", "0");
+    feOffset.setAttribute("dy", "0.003");
+    feOffset.setAttribute("result", "offsetBlur");
+    innerShadow.appendChild(feOffset);
+
+    const feComposite = document.createElementNS(SVG_NS, "feComposite");
+    feComposite.setAttribute("in", "SourceGraphic");
+    feComposite.setAttribute("in2", "offsetBlur");
+    feComposite.setAttribute("operator", "over");
+    innerShadow.appendChild(feComposite);
+
+    defs.appendChild(innerShadow);
+
+    svg.insertBefore(defs, svg.firstChild);
   }
 
   handleDeactivate() {
@@ -254,9 +491,9 @@ export class Terminal extends Middleware<BilliardContext> {
 
       // 3. Gloss/Highlight (Fixed on top)
       const highlight = document.createElementNS(SVG_NS, "circle");
-      highlight.setAttribute("r", String(r * 0.9));
-      highlight.setAttribute("cx", String(-r * 0.2));
-      highlight.setAttribute("cy", String(-r * 0.2));
+      highlight.setAttribute("r", String(r));
+      highlight.setAttribute("cx", "0");
+      highlight.setAttribute("cy", "0");
       highlight.classList.add("ball-highlight");
       group.appendChild(highlight);
 
@@ -291,9 +528,8 @@ export class Terminal extends Middleware<BilliardContext> {
 
       // Update Quaternion based on rolling
       if (dist > 0.0001) {
-        // Axis is perpendicular to movement
         const axis = { x: -dy / dist, y: dx / dist, z: 0 };
-        const angle = dist / data.radius; // radians
+        const angle = dist / data.radius; 
         const qRot = Quaternion.fromAxisAngle(axis, angle);
         state.q = qRot.multiply(state.q).normalize();
       }
@@ -303,50 +539,86 @@ export class Terminal extends Middleware<BilliardContext> {
         dynamicGroup.removeChild(dynamicGroup.firstChild);
       }
 
-      // Define vectors
-      // Number is at (0, 0, 1)
-      const vecNumber = state.q.rotateVector({ x: 0, y: 0, z: 1 });
-      const vecNumberRight = state.q.rotateVector({ x: 1, y: 0, z: 0 });
-      const vecNumberUp = state.q.rotateVector({ x: 0, y: 1, z: 0 });
-      
+      // Pre-calculate rotated basis vectors
+      const xAxis = state.q.rotateVector({ x: 1, y: 0, z: 0 });
+      const yAxis = state.q.rotateVector({ x: 0, y: 1, z: 0 });
+      const zAxis = state.q.rotateVector({ x: 0, y: 0, z: 1 });
+
+      // Helper to create matrix transform string
+      const getMatrix = (basisX: any, basisY: any, center: any) => {
+        return `matrix(${basisX.x},${basisX.y},${basisY.x},${basisY.y},${center.x},${center.y})`;
+      };
+
       // Render Stripe Caps (White)
       if (type === 'stripe') {
-        // Cap 1 at (0, 1, 0)
-        const vecCap1 = state.q.rotateVector({ x: 0, y: 1, z: 0 });
-        const vecCap1Right = state.q.rotateVector({ x: 1, y: 0, z: 0 });
-        const vecCap1Up = state.q.rotateVector({ x: 0, y: 0, z: 1 });
+        const offset = r * 0.65;
+        const steps = 20;
 
-        // Cap 2 at (0, -1, 0)
-        const vecCap2 = state.q.rotateVector({ x: 0, y: -1, z: 0 });
-        const vecCap2Right = state.q.rotateVector({ x: 1, y: 0, z: 0 });
-        const vecCap2Up = state.q.rotateVector({ x: 0, y: 0, z: -1 });
-
-        const drawCap = (pos: any, right: any, up: any) => {
-          if (pos.z > -0.2) { 
-            const cap = document.createElementNS(SVG_NS, "circle");
-            // Use matrix transform for perspective
-            const m = [right.x * r, right.y * r, up.x * r, up.y * r, pos.x * r, pos.y * r];
-            cap.setAttribute("transform", `matrix(${m.join(',')})`);
+        const drawCapStack = (sign: 1 | -1) => {
+          for (let i = 0; i < steps; i++) {
+            const t = i / (steps - 1);
+            const h = offset + (r - offset) * t;
+            const sliceRadius = Math.sqrt(r*r - h*h);
             
-            cap.setAttribute("r", "0.75"); // Unit radius relative to ball radius
-            cap.setAttribute("fill", "white");
-            dynamicGroup.appendChild(cap);
+            // Position: (0, sign * h, 0)
+            const center = { 
+              x: yAxis.x * sign * h, 
+              y: yAxis.y * sign * h, 
+              z: yAxis.z * sign * h 
+            };
+
+            // Smooth fade out at the edges to prevent popping
+            const fadeStart = 0.1 * r;
+            const fadeEnd = -0.1 * r;
+
+            if (center.z > fadeEnd) { 
+              let opacity = 1;
+              if (center.z < fadeStart) {
+                opacity = (center.z - fadeEnd) / (fadeStart - fadeEnd);
+              }
+
+              const cap = document.createElementNS(SVG_NS, "circle");
+              cap.setAttribute("transform", getMatrix(xAxis, zAxis, center));
+              cap.setAttribute("r", String(sliceRadius));
+              cap.setAttribute("fill", "white");
+              if (opacity < 1) {
+                cap.setAttribute("opacity", String(opacity));
+              }
+              dynamicGroup.appendChild(cap);
+            }
           }
         };
-        drawCap(vecCap1, vecCap1Right, vecCap1Up);
-        drawCap(vecCap2, vecCap2Right, vecCap2Up);
+        
+        drawCapStack(1);
+        drawCapStack(-1);
       }
 
       // Render Number Spot (White)
       if (number !== null) {
-        if (vecNumber.z > -0.4) { // Visible
+        // Number at Local Z (0, 0, r)
+        const numCenter = { 
+          x: zAxis.x * r, 
+          y: zAxis.y * r, 
+          z: zAxis.z * r 
+        };
+
+        const fadeStart = 0.1 * r;
+        const fadeEnd = -0.1 * r;
+
+        if (numCenter.z > fadeEnd) { // Visible
+          let opacity = 1;
+          if (numCenter.z < fadeStart) {
+            opacity = (numCenter.z - fadeEnd) / (fadeStart - fadeEnd);
+          }
+
           const spot = document.createElementNS(SVG_NS, "g");
-          // Use matrix transform for perfect surface adhesion
-          const m = [vecNumberRight.x * r, vecNumberRight.y * r, vecNumberUp.x * r, vecNumberUp.y * r, vecNumber.x * r, vecNumber.y * r];
-          spot.setAttribute("transform", `matrix(${m.join(',')})`);
+          spot.setAttribute("transform", getMatrix(xAxis, yAxis, numCenter));
+          if (opacity < 1) {
+            spot.setAttribute("opacity", String(opacity));
+          }
           
           const spotCircle = document.createElementNS(SVG_NS, "circle");
-          spotCircle.setAttribute("r", "0.45"); // Unit size
+          spotCircle.setAttribute("r", String(r * 0.4));
           spotCircle.setAttribute("fill", "white");
           spot.appendChild(spotCircle);
 
@@ -354,9 +626,7 @@ export class Terminal extends Middleware<BilliardContext> {
           text.textContent = String(number);
           text.classList.add("ball-text");
           text.setAttribute("dy", "0.1em");
-          text.setAttribute("font-size", "0.5"); // Unit size
-          // Counter-scale text slightly if it gets too squished? 
-          // No, let it squish, that's the effect.
+          text.setAttribute("font-size", String(r * 0.45));
           spot.appendChild(text);
 
           dynamicGroup.appendChild(spot);
@@ -372,6 +642,8 @@ export class Terminal extends Middleware<BilliardContext> {
   tableDriver = Driver.create<Table, Element>({
     filter: (data) => data.type == "table",
     enter: (data) => {
+      const group = document.createElementNS(SVG_NS, "g");
+      
       const element = document.createElementNS(SVG_NS, "rect");
       const w = data.width + data.pocketRadius * 1.5;
       const h = data.height + data.pocketRadius * 1.5;
@@ -380,10 +652,47 @@ export class Terminal extends Middleware<BilliardContext> {
       element.setAttribute("width", String(w + STROKE_WIDTH * 2));
       element.setAttribute("height", String(h + STROKE_WIDTH * 2));
       element.classList.add("table");
-      this.tableGroup.appendChild(element);
+      group.appendChild(element);
 
+      // Add decorative metal dots along the rails
+      const dotRadius = data.pocketRadius * 0.15;
+      const railWidth = data.pocketRadius * 0.75;
+      const dotOffset = railWidth * 0.5;
+      
+      // Positions for dots - evenly spaced along each side
+      const tableW = data.width * 0.5;
+      const tableH = data.height * 0.5;
+      const outerW = w * 0.5;
+      const outerH = h * 0.5;
+      
+      // Top and bottom rails - 3 dots each (avoiding pockets)
+      const hDotPositions = [-tableW * 0.5, 0, tableW * 0.5];
+      // Left and right rails - 2 dots each
+      const vDotPositions = [-tableH * 0.35, tableH * 0.35];
+      
+      const addDot = (x: number, y: number) => {
+        const dot = document.createElementNS(SVG_NS, "circle");
+        dot.setAttribute("cx", String(x));
+        dot.setAttribute("cy", String(y));
+        dot.setAttribute("r", String(dotRadius));
+        dot.setAttribute("fill", "url(#metal-dot)");
+        dot.setAttribute("stroke", "#3a4550");
+        dot.setAttribute("stroke-width", String(dotRadius * 0.15));
+        group.appendChild(dot);
+      };
+      
+      // Top rail dots
+      hDotPositions.forEach(x => addDot(x, -outerH + dotOffset));
+      // Bottom rail dots
+      hDotPositions.forEach(x => addDot(x, outerH - dotOffset));
+      // Left rail dots
+      vDotPositions.forEach(y => addDot(-outerW + dotOffset, y));
+      // Right rail dots
+      vDotPositions.forEach(y => addDot(outerW - dotOffset, y));
+
+      this.tableGroup.appendChild(group);
       this.handleWindowResize();
-      return element;
+      return group;
     },
     update: (data, element) => {},
     exit: (data, element) => {
@@ -397,6 +706,22 @@ export class Terminal extends Middleware<BilliardContext> {
       const element = document.createElementNS(SVG_NS, "polygon");
       element.setAttribute("points", String(data.vertices?.map((v) => `${v.x},${v.y}`).join(" ")));
       element.classList.add("rail");
+      
+      // Determine if rail is horizontal or vertical based on vertices
+      if (data.vertices && data.vertices.length >= 2) {
+        const xs = data.vertices.map(v => v.x);
+        const ys = data.vertices.map(v => v.y);
+        const width = Math.max(...xs) - Math.min(...xs);
+        const height = Math.max(...ys) - Math.min(...ys);
+        
+        // If wider than tall, it's horizontal (top/bottom)
+        if (width > height) {
+          element.setAttribute("fill", "url(#rail-horizontal)");
+        } else {
+          element.setAttribute("fill", "url(#rail-vertical)");
+        }
+      }
+      
       this.tableGroup.appendChild(element);
       return element;
     },
@@ -409,13 +734,26 @@ export class Terminal extends Middleware<BilliardContext> {
   pocketDriver = Driver.create<Pocket, Element>({
     filter: (data) => data.type == "pocket",
     enter: (data) => {
+      const group = document.createElementNS(SVG_NS, "g");
+      
+      // Wood ring around pocket (chamfered edge)
+      const woodRing = document.createElementNS(SVG_NS, "circle");
+      woodRing.setAttribute("cx", String(data.position.x));
+      woodRing.setAttribute("cy", String(data.position.y));
+      woodRing.setAttribute("r", String(data.radius * 1.15));
+      woodRing.setAttribute("fill", "#2a1a0a");
+      group.appendChild(woodRing);
+
+      // Main pocket hole
       const element = document.createElementNS(SVG_NS, "circle");
       element.setAttribute("cx", String(data.position.x));
       element.setAttribute("cy", String(data.position.y));
       element.setAttribute("r", String(data.radius));
       element.classList.add("pocket");
-      this.tableGroup.appendChild(element);
-      return element;
+      group.appendChild(element);
+
+      this.tableGroup.appendChild(group);
+      return group;
     },
     update: (data, element) => {},
     exit: (data, element) => {
