@@ -67,6 +67,7 @@ export class Terminal extends Middleware<BilliardContext> {
   ballsGroup: SVGGElement;
   tableGroup: SVGGElement;
   cueGroup: SVGGElement;
+  frameGroup: SVGGElement;
 
   constructor() {
     super();
@@ -87,11 +88,13 @@ export class Terminal extends Middleware<BilliardContext> {
     this.ballsGroup = document.createElementNS(SVG_NS, "g");
     this.tableGroup = document.createElementNS(SVG_NS, "g");
     this.cueGroup = document.createElementNS(SVG_NS, "g");
+    this.frameGroup = document.createElementNS(SVG_NS, "g");
 
     this.container = document.createElementNS(SVG_NS, "g");
     this.container.classList.add("billiards");
 
     // Order matters for z-index
+    this.container.appendChild(this.frameGroup); // outer wood frame behind everything
     this.container.appendChild(this.tableGroup);
     this.container.appendChild(this.ballsGroup);
     this.container.appendChild(this.cueGroup); // Cue on top of balls
@@ -108,12 +111,66 @@ export class Terminal extends Middleware<BilliardContext> {
       this.container.parentElement?.addEventListener("pointerdown", this.handlePointerDown);
       this.container.parentElement?.addEventListener("pointermove", this.handlePointerMove);
       this.container.parentElement?.addEventListener("pointerup", this.handlePointerUp);
+      
+      this.setupPowerControl();
+
       window.addEventListener("resize", this.handleWindowResize);
       window.addEventListener("orientationchange", this.handleWindowResize);
       this.handleWindowResize();
     } else {
       console.error("Container SVG element not found");
     }
+  }
+
+  powerCleanup?: () => void;
+
+  setupPowerControl() {
+    const container = document.querySelector('.power-bar-container') as HTMLElement;
+    const indicator = document.querySelector('.power-indicator') as HTMLElement;
+    if (!container || !indicator) return;
+
+    const updatePower = (clientY: number) => {
+      const rect = container.getBoundingClientRect();
+      const height = rect.height;
+      const bottom = rect.bottom;
+      // y goes down. bottom is high y.
+      // dist from bottom = bottom - clientY.
+      let val = (bottom - clientY) / height;
+      val = Math.max(0, Math.min(1, val));
+      
+      indicator.style.bottom = `${val * 100}%`;
+      this.emit("user-power-change", val);
+      return val;
+    };
+
+    const onMove = (e: PointerEvent) => {
+      e.preventDefault();
+      updatePower(e.clientY);
+    };
+
+    const onUp = (e: PointerEvent) => {
+      e.preventDefault();
+      const val = updatePower(e.clientY);
+      this.emit("user-power-release", val);
+      indicator.style.bottom = '0%';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+
+    const onDown = (e: PointerEvent) => {
+      e.preventDefault();
+      updatePower(e.clientY);
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    };
+
+    container.addEventListener('pointerdown', onDown);
+
+    this.powerCleanup = () => {
+      container.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
   }
 
   addSvgDefs(svg: SVGSVGElement) {
@@ -152,6 +209,27 @@ export class Terminal extends Middleware<BilliardContext> {
 
     // Wood grain gradient for rails
     const woodGradient = document.createElementNS(SVG_NS, "linearGradient");
+        // Outer frame wood gradient (distinct, deeper tone)
+        const frameWood = document.createElementNS(SVG_NS, "linearGradient");
+        frameWood.id = "frame-wood";
+        frameWood.setAttribute("x1", "0%");
+        frameWood.setAttribute("y1", "0%");
+        frameWood.setAttribute("x2", "100%");
+        frameWood.setAttribute("y2", "100%");
+        const frameStops = [
+          { offset: "0%", color: "#3b2414" },
+          { offset: "25%", color: "#4a2e19" },
+          { offset: "50%", color: "#56351e" },
+          { offset: "75%", color: "#432918" },
+          { offset: "100%", color: "#2e1b10" },
+        ];
+        frameStops.forEach(({ offset, color }) => {
+          const s = document.createElementNS(SVG_NS, "stop");
+          s.setAttribute("offset", offset);
+          s.setAttribute("stop-color", color);
+          frameWood.appendChild(s);
+        });
+        defs.appendChild(frameWood);
     woodGradient.id = "wood-grain";
     woodGradient.setAttribute("x1", "0%");
     woodGradient.setAttribute("y1", "0%");
@@ -295,6 +373,50 @@ export class Terminal extends Middleware<BilliardContext> {
 
     defs.appendChild(metalGradient);
 
+    // Cue stick shaft gradient (maple wood)
+    const cueShaft = document.createElementNS(SVG_NS, "linearGradient");
+    cueShaft.id = "cue-shaft";
+    cueShaft.setAttribute("x1", "0%");
+    cueShaft.setAttribute("y1", "0%");
+    cueShaft.setAttribute("x2", "0%");
+    cueShaft.setAttribute("y2", "100%");
+    const shaftStops = [
+      { offset: "0%", color: "#f5deb3" },
+      { offset: "30%", color: "#deb887" },
+      { offset: "50%", color: "#f5deb3" },
+      { offset: "70%", color: "#d2b48c" },
+      { offset: "100%", color: "#c4a67a" },
+    ];
+    shaftStops.forEach(({ offset, color }) => {
+      const s = document.createElementNS(SVG_NS, "stop");
+      s.setAttribute("offset", offset);
+      s.setAttribute("stop-color", color);
+      cueShaft.appendChild(s);
+    });
+    defs.appendChild(cueShaft);
+
+    // Cue stick butt gradient (darker wood)
+    const cueButt = document.createElementNS(SVG_NS, "linearGradient");
+    cueButt.id = "cue-butt";
+    cueButt.setAttribute("x1", "0%");
+    cueButt.setAttribute("y1", "0%");
+    cueButt.setAttribute("x2", "0%");
+    cueButt.setAttribute("y2", "100%");
+    const buttStops = [
+      { offset: "0%", color: "#4a3728" },
+      { offset: "25%", color: "#5c4033" },
+      { offset: "50%", color: "#3d2b1f" },
+      { offset: "75%", color: "#5c4033" },
+      { offset: "100%", color: "#4a3728" },
+    ];
+    buttStops.forEach(({ offset, color }) => {
+      const s = document.createElementNS(SVG_NS, "stop");
+      s.setAttribute("offset", offset);
+      s.setAttribute("stop-color", color);
+      cueButt.appendChild(s);
+    });
+    defs.appendChild(cueButt);
+
     // Drop shadow filter for depth
     const dropShadow = document.createElementNS(SVG_NS, "filter");
     dropShadow.id = "drop-shadow";
@@ -351,6 +473,12 @@ export class Terminal extends Middleware<BilliardContext> {
     this.container.parentElement?.removeEventListener("pointerdown", this.handlePointerDown);
     this.container.parentElement?.removeEventListener("pointermove", this.handlePointerMove);
     this.container.parentElement?.removeEventListener("pointerup", this.handlePointerUp);
+    
+    if (this.powerCleanup) {
+      this.powerCleanup();
+      this.powerCleanup = undefined;
+    }
+
     this.container.remove();
   }
 
@@ -414,13 +542,19 @@ export class Terminal extends Middleware<BilliardContext> {
   handleFrameLoop = () => {
     if (!this.context.balls || !this.context.rails || !this.context.pockets) return;
 
-    this.dataset.data([
+    const data: (Ball | Rail | Pocket | CueStick | Table)[] = [
       this.context.table,
       ...this.context.rails,
       ...this.context.pockets,
       ...this.context.balls,
-      this.context.cue,
-    ]);
+    ];
+    
+    // Only include cue if it exists
+    if (this.context.cue) {
+      data.push(this.context.cue);
+    }
+
+    this.dataset.data(data);
   };
 
   ballDriver = Driver.create<Ball, Element>({
@@ -654,6 +788,16 @@ export class Terminal extends Middleware<BilliardContext> {
       element.classList.add("table");
       group.appendChild(element);
 
+      // Outer frame (slightly larger than table rectangle)
+      const frame = document.createElementNS(SVG_NS, "rect");
+      const framePad = data.pocketRadius * 2.2; // thickness of wood frame
+      frame.setAttribute("x", String(-w * 0.5 - framePad));
+      frame.setAttribute("y", String(-h * 0.5 - framePad));
+      frame.setAttribute("width", String(w + framePad * 2));
+      frame.setAttribute("height", String(h + framePad * 2));
+      frame.classList.add("frame");
+      this.frameGroup.appendChild(frame);
+
       // Add decorative metal dots along the rails
       const dotRadius = data.pocketRadius * 0.15;
       const railWidth = data.pocketRadius * 0.75;
@@ -736,13 +880,24 @@ export class Terminal extends Middleware<BilliardContext> {
     enter: (data) => {
       const group = document.createElementNS(SVG_NS, "g");
       
-      // Wood ring around pocket (chamfered edge)
-      const woodRing = document.createElementNS(SVG_NS, "circle");
-      woodRing.setAttribute("cx", String(data.position.x));
-      woodRing.setAttribute("cy", String(data.position.y));
-      woodRing.setAttribute("r", String(data.radius * 1.15));
-      woodRing.setAttribute("fill", "#2a1a0a");
-      group.appendChild(woodRing);
+      // Outer wood surround (shows thickness outside hole)
+      const outerWood = document.createElementNS(SVG_NS, "circle");
+      outerWood.setAttribute("cx", String(data.position.x));
+      outerWood.setAttribute("cy", String(data.position.y));
+      outerWood.setAttribute("r", String(data.radius * 1.35));
+      outerWood.setAttribute("fill", "url(#frame-wood)");
+      outerWood.setAttribute("stroke", "#2a1a0a");
+      outerWood.setAttribute("stroke-width", String(data.radius * 0.15));
+      group.appendChild(outerWood);
+
+      // Inner bevel ring
+      const bevelRing = document.createElementNS(SVG_NS, "circle");
+      bevelRing.setAttribute("cx", String(data.position.x));
+      bevelRing.setAttribute("cy", String(data.position.y));
+      bevelRing.setAttribute("r", String(data.radius * 1.1));
+      bevelRing.setAttribute("fill", "#1b120a");
+      bevelRing.setAttribute("opacity", "0.7");
+      group.appendChild(bevelRing);
 
       // Main pocket hole
       const element = document.createElementNS(SVG_NS, "circle");
@@ -764,16 +919,310 @@ export class Terminal extends Middleware<BilliardContext> {
   cueDriver = Driver.create<CueStick, Element>({
     filter: (data) => data.type == "cue",
     enter: (data) => {
-      const element = document.createElementNS(SVG_NS, "line");
-      element.classList.add("cue");
-      this.cueGroup.appendChild(element);
-      return element;
+      const group = document.createElementNS(SVG_NS, "g");
+      group.classList.add("cue-group");
+      
+      // Guide line (Solid)
+      const guideLine = document.createElementNS(SVG_NS, "line");
+      guideLine.classList.add("guide-line");
+      guideLine.setAttribute("stroke", "white");
+      guideLine.setAttribute("stroke-width", "0.002");
+      guideLine.setAttribute("opacity", "0.5");
+      group.appendChild(guideLine);
+
+      // Target Path Line (Direction hit ball will go)
+      const targetLine = document.createElementNS(SVG_NS, "line");
+      targetLine.classList.add("target-line");
+      targetLine.setAttribute("stroke", "white");
+      targetLine.setAttribute("stroke-width", "0.002");
+      targetLine.setAttribute("opacity", "0.5");
+      targetLine.style.display = "none";
+      group.appendChild(targetLine);
+
+      // Deflection Path Line (Direction cue ball will go)
+      const deflectLine = document.createElementNS(SVG_NS, "line");
+      deflectLine.classList.add("deflect-line");
+      deflectLine.setAttribute("stroke", "white");
+      deflectLine.setAttribute("stroke-width", "0.002");
+      deflectLine.setAttribute("opacity", "0.3");
+      deflectLine.style.display = "none";
+      group.appendChild(deflectLine);
+      
+      const shadow = document.createElementNS(SVG_NS, "line");
+      shadow.classList.add("cue-shadow");
+      group.appendChild(shadow);
+      
+      const butt = document.createElementNS(SVG_NS, "line");
+      butt.classList.add("cue-butt");
+      group.appendChild(butt);
+      
+      const wrap = document.createElementNS(SVG_NS, "line");
+      wrap.classList.add("cue-wrap");
+      group.appendChild(wrap);
+      
+      const shaft = document.createElementNS(SVG_NS, "line");
+      shaft.classList.add("cue-shaft");
+      group.appendChild(shaft);
+      
+      const ferrule = document.createElementNS(SVG_NS, "line");
+      ferrule.classList.add("cue-ferrule");
+      group.appendChild(ferrule);
+      
+      const tip = document.createElementNS(SVG_NS, "circle");
+      tip.classList.add("cue-tip");
+      tip.setAttribute("r", "0.007");
+      group.appendChild(tip);
+
+      // Ghost Ball (Impact Indicator)
+      const ghostBall = document.createElementNS(SVG_NS, "circle");
+      ghostBall.classList.add("ghost-ball");
+      ghostBall.setAttribute("r", "0.01"); // Will be updated to match ball radius
+      ghostBall.setAttribute("fill", "none");
+      ghostBall.setAttribute("stroke", "white");
+      ghostBall.setAttribute("stroke-width", "0.002");
+      ghostBall.setAttribute("stroke-dasharray", "0.005, 0.005");
+      ghostBall.setAttribute("opacity", "0.5");
+      ghostBall.style.display = "none";
+      group.appendChild(ghostBall);
+      
+      // Cache element references to avoid querySelector each frame
+      (group as any).__cueElements = { shadow, butt, wrap, shaft, ferrule, tip, guideLine, ghostBall, targetLine, deflectLine };
+      
+      this.cueGroup.appendChild(group);
+      return group;
     },
     update: (data, element) => {
-      element.setAttribute("x1", String(data.start.x));
-      element.setAttribute("y1", String(data.start.y));
-      element.setAttribute("x2", String(data.end.x));
-      element.setAttribute("y2", String(data.end.y));
+      const cached = (element as any).__cueElements;
+      if (!cached) return;
+      
+      const { shadow, butt, wrap, shaft, ferrule, tip, guideLine, ghostBall, targetLine, deflectLine } = cached;
+      
+      // start = cue ball position, end = opposite side of where ball will go
+      // The ball shoots AWAY from cue.end, so the cue tip should be OPPOSITE to cue.end
+      const ballX = data.start.x;
+      const ballY = data.start.y;
+      const endX = data.end.x;
+      const endY = data.end.y;
+      
+      // Direction from end toward ball (this points toward where ball will go)
+      // Cue should be on the OPPOSITE side, so we flip it
+      const dx = ballX - endX;
+      const dy = ballY - endY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      // Hide if distance too small
+      if (dist < 0.005) {
+        (element as SVGElement).style.display = "none";
+        return;
+      }
+      (element as SVGElement).style.display = "";
+      
+      // Normalized direction (pointing from ball AWAY from cue.end = toward shot direction)
+      // Cue tip is on opposite side, so we use negative direction
+      const nx = -dx / dist;
+      const ny = -dy / dist;
+
+      // --- Guide Line Raycast ---
+      // Shot direction is (nx, ny) * -1 = (dx/dist, dy/dist)
+      // Wait, nx is -dx/dist. So shot direction is -nx, -ny.
+      // Let's re-verify:
+      // cue.end is handle. cue.start is ball.
+      // Vector from handle to ball is (start - end) = (dx, dy).
+      // This is the direction the stick is pointing.
+      // So shot direction is (dx, dy) normalized.
+      const shotDx = dx / dist;
+      const shotDy = dy / dist;
+
+      let hitDist = 2.0; // Max length
+      let hitBallRadius = 0;
+      let hitType = 'none';
+      let hitBallPos = { x: 0, y: 0 };
+
+      // 1. Check Walls
+      const table = this.context.table;
+      if (table) {
+        const w = table.width / 2;
+        const h = table.height / 2;
+        // Ray: O + tD.
+        // x = ox + t*dx.
+        // t = (x - ox) / dx.
+        
+        if (shotDx > 0.0001) {
+           const t = (w - ballX) / shotDx;
+           if (t > 0 && t < hitDist) { hitDist = t; hitType = 'wall'; }
+        } else if (shotDx < -0.0001) {
+           const t = (-w - ballX) / shotDx;
+           if (t > 0 && t < hitDist) { hitDist = t; hitType = 'wall'; }
+        }
+        
+        if (shotDy > 0.0001) {
+           const t = (h - ballY) / shotDy;
+           if (t > 0 && t < hitDist) { hitDist = t; hitType = 'wall'; }
+        } else if (shotDy < -0.0001) {
+           const t = (-h - ballY) / shotDy;
+           if (t > 0 && t < hitDist) { hitDist = t; hitType = 'wall'; }
+        }
+      }
+
+      // 2. Check Balls
+      if (this.context.balls) {
+        const ballRadius = data.ball.radius; // Assuming all balls same radius
+        const collisionRadius = ballRadius * 2;
+        const collisionRadiusSq = collisionRadius * collisionRadius;
+
+        for (const otherBall of this.context.balls) {
+          if (otherBall.key === data.ball.key) continue; // Skip cue ball
+          
+          // Vector to ball center
+          const vx = otherBall.position.x - ballX;
+          const vy = otherBall.position.y - ballY;
+          
+          // Project onto ray
+          const t = vx * shotDx + vy * shotDy;
+          
+          if (t > 0) {
+            // Distance squared from line
+            const dSq = (vx * vx + vy * vy) - (t * t);
+            
+            if (dSq < collisionRadiusSq) {
+              // Intersection distance
+              const dt = Math.sqrt(collisionRadiusSq - dSq);
+              const tHit = t - dt;
+              if (tHit > 0 && tHit < hitDist) {
+                hitDist = tHit;
+                hitBallRadius = otherBall.radius;
+                hitType = 'ball';
+                hitBallPos = otherBall.position;
+              }
+            }
+          }
+        }
+      }
+
+      const guideEndX = ballX + shotDx * hitDist;
+      const guideEndY = ballY + shotDy * hitDist;
+
+      guideLine.setAttribute("x1", String(ballX));
+      guideLine.setAttribute("y1", String(ballY));
+      guideLine.setAttribute("x2", String(guideEndX));
+      guideLine.setAttribute("y2", String(guideEndY));
+
+      // Update Ghost Ball and Direction Lines
+      if (hitType === 'ball') {
+        ghostBall.style.display = "";
+        ghostBall.setAttribute("cx", String(guideEndX));
+        ghostBall.setAttribute("cy", String(guideEndY));
+        ghostBall.setAttribute("r", String(hitBallRadius));
+
+        // Calculate impact normal (direction target ball will go)
+        // Vector from ghost ball center (guideEnd) to target ball center (hitBallPos)
+        const nx = hitBallPos.x - guideEndX;
+        const ny = hitBallPos.y - guideEndY;
+        const nLen = Math.sqrt(nx * nx + ny * ny);
+        
+        if (nLen > 0.0001) {
+            const normX = nx / nLen;
+            const normY = ny / nLen;
+            
+            // Target Line (from target ball center outwards)
+            const targetLen = 0.08; // Length of indicator
+            targetLine.style.display = "";
+            targetLine.setAttribute("x1", String(hitBallPos.x));
+            targetLine.setAttribute("y1", String(hitBallPos.y));
+            targetLine.setAttribute("x2", String(hitBallPos.x + normX * targetLen));
+            targetLine.setAttribute("y2", String(hitBallPos.y + normY * targetLen));
+
+            // Deflection Line (tangent to impact)
+            // Cue ball velocity is (shotDx, shotDy)
+            // Tangent component = Velocity - Normal Component
+            // V_dot_N = V . N
+            const vDotN = shotDx * normX + shotDy * normY;
+            const tanX = shotDx - vDotN * normX;
+            const tanY = shotDy - vDotN * normY;
+            const tanLen = Math.sqrt(tanX * tanX + tanY * tanY);
+            
+            if (tanLen > 0.001) {
+                const deflectLen = 0.06;
+                // Normalize tangent for consistent line length, or keep proportional to show energy transfer?
+                // Let's normalize for direction indication
+                const dX = tanX / tanLen;
+                const dY = tanY / tanLen;
+                
+                deflectLine.style.display = "";
+                deflectLine.setAttribute("x1", String(guideEndX));
+                deflectLine.setAttribute("y1", String(guideEndY));
+                deflectLine.setAttribute("x2", String(guideEndX + dX * deflectLen));
+                deflectLine.setAttribute("y2", String(guideEndY + dY * deflectLen));
+            } else {
+                deflectLine.style.display = "none";
+            }
+        }
+      } else {
+        ghostBall.style.display = "none";
+        targetLine.style.display = "none";
+        deflectLine.style.display = "none";
+      }
+      // --------------------------
+      
+      // Cue dimensions
+      const cueLength = 0.6;
+      const minGap = 0.02;
+      const gap = minGap + dist * 0.08;
+      
+      // Cue TIP position (behind the ball, opposite to shot direction)
+      const tipX = ballX + nx * gap;
+      const tipY = ballY + ny * gap;
+      
+      // Cue BUTT position (further behind)
+      const buttX = tipX + nx * cueLength;
+      const buttY = tipY + ny * cueLength;
+      
+      // Section lengths
+      const tipLen = 0.01;
+      const ferruleLen = 0.018;
+      const shaftLen = cueLength * 0.5;
+      const wrapLen = 0.05;
+      
+      let pos = 0;
+      
+      // Tip (closest to ball)
+      tip.setAttribute("cx", String(tipX));
+      tip.setAttribute("cy", String(tipY));
+      pos += tipLen;
+      
+      // Ferrule
+      ferrule.setAttribute("x1", String(tipX + nx * pos));
+      ferrule.setAttribute("y1", String(tipY + ny * pos));
+      pos += ferruleLen;
+      ferrule.setAttribute("x2", String(tipX + nx * pos));
+      ferrule.setAttribute("y2", String(tipY + ny * pos));
+      
+      // Shaft
+      shaft.setAttribute("x1", String(tipX + nx * pos));
+      shaft.setAttribute("y1", String(tipY + ny * pos));
+      pos += shaftLen;
+      shaft.setAttribute("x2", String(tipX + nx * pos));
+      shaft.setAttribute("y2", String(tipY + ny * pos));
+      
+      // Wrap
+      wrap.setAttribute("x1", String(tipX + nx * pos));
+      wrap.setAttribute("y1", String(tipY + ny * pos));
+      pos += wrapLen;
+      wrap.setAttribute("x2", String(tipX + nx * pos));
+      wrap.setAttribute("y2", String(tipY + ny * pos));
+      
+      // Butt
+      butt.setAttribute("x1", String(tipX + nx * pos));
+      butt.setAttribute("y1", String(tipY + ny * pos));
+      butt.setAttribute("x2", String(buttX));
+      butt.setAttribute("y2", String(buttY));
+      
+      // Shadow
+      const so = 0.005;
+      shadow.setAttribute("x1", String(tipX + so));
+      shadow.setAttribute("y1", String(tipY + so));
+      shadow.setAttribute("x2", String(buttX + so));
+      shadow.setAttribute("y2", String(buttY + so));
     },
     exit: (data, element) => {
       element.remove();

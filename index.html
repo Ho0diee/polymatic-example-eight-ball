@@ -16,19 +16,35 @@
   <!-- Top Bar -->
   <div id="top-bar">
     <div class="player-section">
+      <div class="turn-indicator active"></div>
       <div class="avatar"></div>
-      <div class="player-info">
-        <span class="name">Player</span>
-        <div class="progress-bar"><div class="fill" style="width: 70%"></div></div>
+      <div class="ball-indicators" id="player1-balls">
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
       </div>
     </div>
-    <div class="game-title">8-Ball</div>
+    <div class="game-stats">
+      <div class="stat-box multiplier">x1</div>
+      <div class="stat-box score">0</div>
+      <div class="stat-box time">0:00</div>
+    </div>
     <div class="player-section opponent">
-      <div class="player-info">
-        <span class="name">Rarer</span>
-        <div class="progress-bar"><div class="fill" style="width: 40%"></div></div>
+      <div class="ball-indicators" id="player2-balls">
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
+        <div class="ball-slot filled"></div>
       </div>
       <div class="avatar"></div>
+      <div class="turn-indicator"></div>
     </div>
   </div>
 

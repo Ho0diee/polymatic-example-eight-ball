@@ -9,6 +9,7 @@ import { Physics } from "../eight-ball/Physics";
 import { type BilliardContext } from "../eight-ball/BilliardContext";
 import { StatusOffline } from "./StatusOffline";
 import { Rack } from "../eight-ball/Rack";
+import { ScoreboardUI } from "./ScoreboardUI";
 
 /**
  * Main class for the offline billiard game.
@@ -24,6 +25,7 @@ export class MainOffline extends Middleware<BilliardContext> {
     this.use(new CueShot());
     this.use(new Terminal());
     this.use(new StatusOffline());
+    this.use(new ScoreboardUI());
     this.on("activate", this.handleActivate);
   }
 
