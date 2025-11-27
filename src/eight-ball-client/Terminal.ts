@@ -601,6 +601,17 @@ export class Terminal extends Middleware<BilliardContext> {
 
       const r = data.radius - STROKE_WIDTH;
 
+      // Create Clip Path to prevent elements from sticking out
+      const clipId = "clip-" + data.key;
+      const defs = document.createElementNS(SVG_NS, "defs");
+      const clipPath = document.createElementNS(SVG_NS, "clipPath");
+      clipPath.id = clipId;
+      const clipCircle = document.createElementNS(SVG_NS, "circle");
+      clipCircle.setAttribute("r", String(r));
+      clipPath.appendChild(clipCircle);
+      defs.appendChild(clipPath);
+      group.appendChild(defs);
+
       // 1. Base Circle (The main color)
       const baseCircle = document.createElementNS(SVG_NS, "circle");
       baseCircle.setAttribute("r", String(r));
@@ -621,6 +632,7 @@ export class Terminal extends Middleware<BilliardContext> {
 
       // 2. Dynamic Elements Group (Caps, Number)
       const dynamicGroup = document.createElementNS(SVG_NS, "g");
+      dynamicGroup.setAttribute("clip-path", `url(#${clipId})`);
       group.appendChild(dynamicGroup);
 
       // 3. Gloss/Highlight (Fixed on top)
@@ -685,7 +697,7 @@ export class Terminal extends Middleware<BilliardContext> {
 
       // Render Stripe Caps (White)
       if (type === 'stripe') {
-        const offset = r * 0.65;
+        const offset = r * 0.5;
         const steps = 20;
 
         const drawCapStack = (sign: 1 | -1) => {
@@ -745,22 +757,31 @@ export class Terminal extends Middleware<BilliardContext> {
             opacity = (numCenter.z - fadeEnd) / (fadeStart - fadeEnd);
           }
 
+          // Calculate foreshortening based on depth (z)
+          // When z is r (center), scale is 1. When z is 0 (edge), scale is 0.
+          const scale = Math.max(0.01, Math.abs(numCenter.z) / r);
+          const angle = Math.atan2(numCenter.y, numCenter.x) * 180 / Math.PI;
+
           const spot = document.createElementNS(SVG_NS, "g");
-          spot.setAttribute("transform", getMatrix(xAxis, yAxis, numCenter));
+          // Translate to position, rotate to align with radius, squash radially, rotate back
+          spot.setAttribute("transform", 
+            `translate(${numCenter.x}, ${numCenter.y}) rotate(${angle}) scale(${scale}, 1) rotate(${-angle})`
+          );
+          
           if (opacity < 1) {
             spot.setAttribute("opacity", String(opacity));
           }
           
           const spotCircle = document.createElementNS(SVG_NS, "circle");
-          spotCircle.setAttribute("r", String(r * 0.4));
+          spotCircle.setAttribute("r", String(r * 0.6));
           spotCircle.setAttribute("fill", "white");
           spot.appendChild(spotCircle);
 
           const text = document.createElementNS(SVG_NS, "text");
           text.textContent = String(number);
           text.classList.add("ball-text");
-          text.setAttribute("dy", "0.1em");
-          text.setAttribute("font-size", String(r * 0.45));
+          text.setAttribute("dy", "0");
+          text.setAttribute("font-size", String(r * 0.8));
           spot.appendChild(text);
 
           dynamicGroup.appendChild(spot);
@@ -790,7 +811,7 @@ export class Terminal extends Middleware<BilliardContext> {
 
       // Outer frame (slightly larger than table rectangle)
       const frame = document.createElementNS(SVG_NS, "rect");
-      const framePad = data.pocketRadius * 2.2; // thickness of wood frame
+      const framePad = data.pocketRadius * 1.8; // thickness of wood frame
       frame.setAttribute("x", String(-w * 0.5 - framePad));
       frame.setAttribute("y", String(-h * 0.5 - framePad));
       frame.setAttribute("width", String(w + framePad * 2));
@@ -950,22 +971,37 @@ export class Terminal extends Middleware<BilliardContext> {
       
       const shadow = document.createElementNS(SVG_NS, "line");
       shadow.classList.add("cue-shadow");
+      shadow.setAttribute("stroke", "rgba(0,0,0,0.3)");
+      shadow.setAttribute("stroke-width", "0.014");
+      shadow.setAttribute("stroke-linecap", "round");
       group.appendChild(shadow);
       
       const butt = document.createElementNS(SVG_NS, "line");
       butt.classList.add("cue-butt");
+      butt.setAttribute("stroke", "#4a3728");
+      butt.setAttribute("stroke-width", "0.018");
+      butt.setAttribute("stroke-linecap", "round");
       group.appendChild(butt);
       
       const wrap = document.createElementNS(SVG_NS, "line");
       wrap.classList.add("cue-wrap");
+      wrap.setAttribute("stroke", "#1a1a1a");
+      wrap.setAttribute("stroke-width", "0.016");
+      wrap.setAttribute("stroke-linecap", "butt");
       group.appendChild(wrap);
       
       const shaft = document.createElementNS(SVG_NS, "line");
       shaft.classList.add("cue-shaft");
+      shaft.setAttribute("stroke", "#deb887");
+      shaft.setAttribute("stroke-width", "0.013");
+      shaft.setAttribute("stroke-linecap", "butt");
       group.appendChild(shaft);
       
       const ferrule = document.createElementNS(SVG_NS, "line");
       ferrule.classList.add("cue-ferrule");
+      ferrule.setAttribute("stroke", "#f0f0f0");
+      ferrule.setAttribute("stroke-width", "0.012");
+      ferrule.setAttribute("stroke-linecap", "butt");
       group.appendChild(ferrule);
       
       const tip = document.createElementNS(SVG_NS, "circle");

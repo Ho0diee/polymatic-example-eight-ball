@@ -93,7 +93,7 @@ export class CueStick {
   key = "cue-" + nanoid(6);
   ball: Ball;
   start: Point = { x: 0, y: 0 };
-  end: Point = { x: 0, y: 0 };
+  end: Point = { x: -1, y: 0 };
 }
 
 export interface Player {
