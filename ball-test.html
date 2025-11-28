@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pool Ball Rotation Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a1a;
+      color: white;
+      font-family: Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .controls {
+      padding: 20px;
+      background: #252525;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .control-group label {
+      font-size: 12px;
+      color: #888;
+    }
+    select, input[type="range"] {
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      background: #333;
+      color: white;
+    }
+    input[type="range"] {
+      width: 200px;
+    }
+    .angle-display {
+      font-family: monospace;
+      font-size: 14px;
+      min-width: 80px;
+    }
+    .ball-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+      flex-wrap: wrap;
+    }
+    svg.single-view {
+      width: 400px;
+      height: 400px;
+      background: #0d5c35;
+      border-radius: 8px;
+    }
+    svg.all-view {
+      width: 100%;
+      max-width: 1000px;
+      height: auto;
+      aspect-ratio: 4/4;
+      background: #0d5c35;
+      border-radius: 8px;
+    }
+    .ball-text {
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: bold;
+      fill: black;
+      letter-spacing: -0.02em;
+    }
+    .ball-highlight {
+      fill: url(#ball-highlight-gradient);
+      pointer-events: none;
+    }
+    .ball.yellow { fill: #e6b800; }
+    .ball.blue { fill: #1a5fb4; }
+    .ball.red { fill: #c01c28; }
+    .ball.purple { fill: #613583; }
+    .ball.orange { fill: #e66100; }
+    .ball.green { fill: #26a269; }
+    .ball.burgundy { fill: #6b2e35; }
+    .ball.black { fill: #1a1a1a; }
+    .ball.white { fill: #f0f0f0; }
+    
+    .info-panel {
+      padding: 20px;
+      background: #252525;
+      font-family: monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .info-panel .label { color: #888; }
+    .info-panel .value { color: #4fc3f7; }
+    
+    .preset-buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      background: #333;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #444;
+    }
+    button.active {
+      background: #4fc3f7;
+      color: black;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <div class="control-group">
+      <label>View Mode</label>
+      <select id="viewMode">
+        <option value="single">Single Ball</option>
+        <option value="all">All Balls</option>
+      </select>
+    </div>
+    
+    <div class="control-group" id="ballSelectGroup">
+      <label>Ball Number</label>
+      <select id="ballSelect">
+        <option value="cue">Cue Ball</option>
+        <option value="1">1 (Yellow Solid)</option>
+        <option value="2">2 (Blue Solid)</option>
+        <option value="3">3 (Red Solid)</option>
+        <option value="4">4 (Purple Solid)</option>
+        <option value="5">5 (Orange Solid)</option>
+        <option value="6">6 (Green Solid)</option>
+        <option value="7">7 (Burgundy Solid)</option>
+        <option value="8" selected>8 (Black)</option>
+        <option value="9">9 (Yellow Stripe)</option>
+        <option value="10">10 (Blue Stripe)</option>
+        <option value="11">11 (Red Stripe)</option>
+        <option value="12">12 (Purple Stripe)</option>
+        <option value="13">13 (Orange Stripe)</option>
+        <option value="14">14 (Green Stripe)</option>
+        <option value="15">15 (Burgundy Stripe)</option>
+      </select>
+    </div>
+    
+    <div class="control-group">
+      <label>X Rotation (Pitch): <span class="angle-display" id="xAngleDisplay">0°</span></label>
+      <input type="range" id="xRotation" min="-180" max="180" value="0">
+    </div>
+    
+    <div class="control-group">
+      <label>Y Rotation (Yaw): <span class="angle-display" id="yAngleDisplay">0°</span></label>
+      <input type="range" id="yRotation" min="-180" max="180" value="0">
+    </div>
+    
+    <div class="control-group">
+      <label>Z Rotation (Roll): <span class="angle-display" id="zAngleDisplay">0°</span></label>
+      <input type="range" id="zRotation" min="-180" max="180" value="0">
+    </div>
+    
+    <div class="control-group">
+      <label>Outline Width: <span class="angle-display" id="outlineDisplay">0.020</span></label>
+      <input type="range" id="outlineWidth" min="0" max="0.1" step="0.002" value="0.02">
+    </div>
+
+    
+    <div class="control-group">
+      <label>Actions</label>
+      <div class="preset-buttons">
+        <button onclick="setPreset('front')">Front</button>
+        <button onclick="setPreset('back')">Back</button>
+        <button onclick="setPreset('reset')">Reset</button>
+        <button onclick="toggleAnimate()" id="animateBtn">Animate</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="ball-container">
+    <svg id="ballSvg" class="single-view" viewBox="-1 -1 2 2">
+      <defs id="ball-defs">
+        <radialGradient id="ball-highlight-gradient" cx="30%" cy="30%" r="70%">
+          <stop offset="0%" stop-color="white" stop-opacity="0.6"/>
+          <stop offset="40%" stop-color="white" stop-opacity="0.1"/>
+          <stop offset="100%" stop-color="black" stop-opacity="0.2"/>
+        </radialGradient>
+      </defs>
+      <g id="ballGroup"></g>
+    </svg>
+  </div>
+  
+  <div class="info-panel" id="infoPanel">
+    <div><span class="label">Current Ball:</span> <span class="value" id="currentBallInfo">8</span></div>
+    <div><span class="label">Quaternion:</span> <span class="value" id="quatInfo">w=1, x=0, y=0, z=0</span></div>
+    <div><span class="label">Scale Factor:</span> <span class="value" id="scaleInfo">1.0</span></div>
+  </div>
+  
+
+
+<script>
+// Quaternion helper class
+class Quaternion {
+  constructor(w = 1, x = 0, y = 0, z = 0) {
+    this.w = w;
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+
+  static fromAxisAngle(axis, angle) {
+    const halfAngle = angle / 2;
+    const s = Math.sin(halfAngle);
+    return new Quaternion(Math.cos(halfAngle), axis.x * s, axis.y * s, axis.z * s);
+  }
+  
+  static fromEuler(x, y, z) {
+    const rx = x * Math.PI / 180;
+    const ry = y * Math.PI / 180;
+    const rz = z * Math.PI / 180;
+    const qx = Quaternion.fromAxisAngle({ x: 1, y: 0, z: 0 }, rx);
+    const qy = Quaternion.fromAxisAngle({ x: 0, y: 1, z: 0 }, ry);
+    const qz = Quaternion.fromAxisAngle({ x: 0, y: 0, z: 1 }, rz);
+    return qz.multiply(qy).multiply(qx).normalize();
+  }
+
+  multiply(q) {
+    return new Quaternion(
+      this.w * q.w - this.x * q.x - this.y * q.y - this.z * q.z,
+      this.w * q.x + this.x * q.w + this.y * q.z - this.z * q.y,
+      this.w * q.y - this.x * q.z + this.y * q.w + this.z * q.x,
+      this.w * q.z + this.x * q.y - this.y * q.x + this.z * q.w
+    );
+  }
+
+  normalize() {
+    const len = Math.sqrt(this.w * this.w + this.x * this.x + this.y * this.y + this.z * this.z);
+    if (len === 0) return this;
+    this.w /= len; this.x /= len; this.y /= len; this.z /= len;
+    return this;
+  }
+
+  conjugate() { return new Quaternion(this.w, -this.x, -this.y, -this.z); }
+
+  rotateVector(v) {
+    const qv = new Quaternion(0, v.x, v.y, v.z);
+    const qResult = this.multiply(qv).multiply(this.conjugate());
+    return { x: qResult.x, y: qResult.y, z: qResult.z };
+  }
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const BALL_RADIUS = 0.5;
+
+const ballProps = {
+  'cue': { color: 'white', number: null, type: 'cue' },
+  '1': { color: 'yellow', number: 1, type: 'solid' },
+  '2': { color: 'blue', number: 2, type: 'solid' },
+  '3': { color: 'red', number: 3, type: 'solid' },
+  '4': { color: 'purple', number: 4, type: 'solid' },
+  '5': { color: 'orange', number: 5, type: 'solid' },
+  '6': { color: 'green', number: 6, type: 'solid' },
+  '7': { color: 'burgundy', number: 7, type: 'solid' },
+  '8': { color: 'black', number: 8, type: '8' },
+  '9': { color: 'yellow', number: 9, type: 'stripe' },
+  '10': { color: 'blue', number: 10, type: 'stripe' },
+  '11': { color: 'red', number: 11, type: 'stripe' },
+  '12': { color: 'purple', number: 12, type: 'stripe' },
+  '13': { color: 'orange', number: 13, type: 'stripe' },
+  '14': { color: 'green', number: 14, type: 'stripe' },
+  '15': { color: 'burgundy', number: 15, type: 'stripe' },
+};
+
+let currentBall = '8';
+let viewMode = 'single';
+let animating = false;
+let animationId = null;
+
+// Permanent ball text adjustments
+const ballTextAdjustments = {
+  1: { x: -0.0100, y: 0.0000, size: 0.91 },
+  2: { x: 0.0020, y: -0.0050, size: 0.85 },
+  3: { x: 0, y: 0, size: 0.85 },
+  4: { x: -0.0100, y: 0.0000, size: 0.89 },
+  5: { x: -0.0060, y: 0.0060, size: 0.85 },
+  6: { x: -0.0070, y: 0.0000, size: 0.88 },
+  7: { x: 0.0060, y: 0.0130, size: 0.88 },
+  8: { x: 0.0000, y: 0.0000, size: 0.88 },
+  9: { x: 0, y: 0, size: 0.85 },
+  10: { x: -0.0125, y: 0.0000, size: 0.78 },
+  11: { x: -0.0125, y: 0.0000, size: 0.78 },
+  12: { x: -0.0195, y: -0.0020, size: 0.74 },
+  13: { x: -0.0125, y: 0.0000, size: 0.75 },
+  14: { x: -0.0195, y: 0.0000, size: 0.77 },
+  15: { x: -0.0145, y: 0.0080, size: 0.75 },
+};
+
+function getAdjustment(ballNum) {
+  const num = parseInt(ballNum);
+  if (ballTextAdjustments[num]) return ballTextAdjustments[num];
+  return { x: 0, y: 0, size: 0.85 };
+}
+
+function renderOneBall(q, props, targetGroup, r, clipId, useSliders = false) {
+  // Get outline width from slider
+  const outlineWidth = parseFloat(document.getElementById('outlineWidth')?.value || 0.02);
+  
+  const baseCircle = document.createElementNS(SVG_NS, "circle");
+  baseCircle.setAttribute("r", String(r));
+  baseCircle.classList.add("ball", props.color);
+  targetGroup.appendChild(baseCircle);
+  
+  const dynamicGroup = document.createElementNS(SVG_NS, "g");
+  dynamicGroup.setAttribute("clip-path", `url(#${clipId})`);
+  targetGroup.appendChild(dynamicGroup);
+  
+  const xAxis = q.rotateVector({ x: 1, y: 0, z: 0 });
+  const yAxis = q.rotateVector({ x: 0, y: 1, z: 0 });
+  const zAxis = q.rotateVector({ x: 0, y: 0, z: 1 });
+  
+  const getMatrix = (basisX, basisY, center) => 
+    `matrix(${basisX.x},${basisX.y},${basisY.x},${basisY.y},${center.x},${center.y})`;
+  
+  if (props.type === 'stripe') {
+    // Stripes are white caps at the poles (top and bottom of the ball)
+    // The stripe band is the colored area around the equator
+    // We draw white caps that cover the top and bottom portions
+    const stripeStart = r * 0.35; // Where the colored stripe starts (from center)
+    const steps = 24;
+    
+    const drawCapStack = (sign) => {
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        // h goes from stripeStart to r (the pole)
+        const h = stripeStart + (r - stripeStart) * t;
+        const sliceRadius = Math.sqrt(r * r - h * h);
+        
+        // Caps are positioned along the Y axis (perpendicular to number which is on Z)
+        const center = {
+          x: yAxis.x * sign * h,
+          y: yAxis.y * sign * h,
+          z: yAxis.z * sign * h
+        };
+        
+        // Only draw if this slice is facing the camera
+        // But we need to check if ANY part of this slice disc is visible
+        // A disc at height h along Y-axis is visible if it's not completely behind
+        if (center.z > -sliceRadius * 0.5) {
+          const cap = document.createElementNS(SVG_NS, "circle");
+          cap.setAttribute("transform", getMatrix(xAxis, zAxis, center));
+          cap.setAttribute("r", String(sliceRadius));
+          cap.setAttribute("fill", "white");
+          // Fade out slices that are mostly behind
+          if (center.z < 0) {
+            const opacity = 1 + center.z / (sliceRadius * 0.5);
+            cap.setAttribute("opacity", String(Math.max(0, opacity)));
+          }
+          dynamicGroup.appendChild(cap);
+        }
+      }
+    };
+    drawCapStack(1);  // Top cap
+    drawCapStack(-1); // Bottom cap
+  }
+  
+  if (props.number !== null) {
+    const numCenter = { x: zAxis.x * r, y: zAxis.y * r, z: zAxis.z * r };
+    
+    if (numCenter.z > 0) {
+      const scale = Math.max(0.01, numCenter.z / r);
+      const angle = Math.atan2(numCenter.y, numCenter.x) * 180 / Math.PI;
+      
+      if (useSliders) {
+        document.getElementById('scaleInfo').textContent = scale.toFixed(3);
+      }
+      
+      const spot = document.createElementNS(SVG_NS, "g");
+      spot.setAttribute("transform",
+        `translate(${numCenter.x}, ${numCenter.y}) rotate(${angle}) scale(${scale}, 1) rotate(${-angle})`
+      );
+      
+      const spotScale = 0.95;
+      const spotCircle = document.createElementNS(SVG_NS, "circle");
+      spotCircle.setAttribute("r", String(r * 0.48 * spotScale));
+      spotCircle.setAttribute("fill", "white");
+      spot.appendChild(spotCircle);
+      
+      // Text follows the same squash transform as the circle (no counter-scale)
+      const text = document.createElementNS(SVG_NS, "text");
+      text.textContent = String(props.number);
+      text.classList.add("ball-text");
+      
+      let xOffset, yOffset, textSizeVal;
+      const adj = getAdjustment(String(props.number));
+      xOffset = adj.x;
+      yOffset = adj.y;
+      textSizeVal = adj.size;
+      
+      text.setAttribute("x", String(xOffset));
+      text.setAttribute("y", String(yOffset));
+      text.setAttribute("font-size", String(r * textSizeVal * spotScale));
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("dominant-baseline", "central");
+      spot.appendChild(text);
+      dynamicGroup.appendChild(spot);
+    }
+  }
+  
+  const highlight = document.createElementNS(SVG_NS, "circle");
+  highlight.setAttribute("r", String(r));
+  highlight.classList.add("ball-highlight");
+  targetGroup.appendChild(highlight);
+  
+  // Add outline on top of everything
+  if (outlineWidth > 0) {
+    const outline = document.createElementNS(SVG_NS, "circle");
+    outline.setAttribute("r", String(r));
+    outline.setAttribute("fill", "none");
+    outline.setAttribute("stroke", "black");
+    outline.setAttribute("stroke-width", String(outlineWidth));
+    targetGroup.appendChild(outline);
+  }
+}
+
+function renderSingleView(q) {
+  const svg = document.getElementById('ballSvg');
+  const ballGroup = document.getElementById('ballGroup');
+  const defs = document.getElementById('ball-defs');
+  
+  svg.classList.remove('all-view');
+  svg.classList.add('single-view');
+  svg.setAttribute('viewBox', '-1 -1 2 2');
+  ballGroup.innerHTML = '';
+  
+  defs.querySelectorAll('clipPath').forEach(cp => cp.remove());
+  
+  const props = ballProps[currentBall];
+  const r = BALL_RADIUS;
+  const clipId = 'clip-single';
+  
+  const clipPath = document.createElementNS(SVG_NS, "clipPath");
+  clipPath.id = clipId;
+  const clipCircle = document.createElementNS(SVG_NS, "circle");
+  clipCircle.setAttribute("r", String(r));
+  clipPath.appendChild(clipCircle);
+  defs.appendChild(clipPath);
+  
+  renderOneBall(q, props, ballGroup, r, clipId, true);
+  
+  document.getElementById('quatInfo').textContent = 
+    `w=${q.w.toFixed(3)}, x=${q.x.toFixed(3)}, y=${q.y.toFixed(3)}, z=${q.z.toFixed(3)}`;
+  document.getElementById('currentBallInfo').textContent = currentBall;
+}
+
+function renderAllView(q) {
+  const svg = document.getElementById('ballSvg');
+  const ballGroup = document.getElementById('ballGroup');
+  const defs = document.getElementById('ball-defs');
+  
+  svg.classList.remove('single-view');
+  svg.classList.add('all-view');
+  svg.setAttribute('viewBox', '-2 -2 4 4');
+  ballGroup.innerHTML = '';
+  
+  defs.querySelectorAll('clipPath').forEach(cp => cp.remove());
+  
+  const allKeys = ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','cue'];
+  const r = 0.4;
+  const cols = 4;
+  const spacing = 0.95;
+  const startX = -1.45;
+  const startY = -1.45;
+  
+  allKeys.forEach((key, idx) => {
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
+    const cx = startX + col * spacing;
+    const cy = startY + row * spacing;
+    
+    const localClipId = 'local-clip-' + key;
+    const localClip = document.createElementNS(SVG_NS, "clipPath");
+    localClip.id = localClipId;
+    const localClipCircle = document.createElementNS(SVG_NS, "circle");
+    localClipCircle.setAttribute("r", String(r));
+    localClip.appendChild(localClipCircle);
+    defs.appendChild(localClip);
+    
+    const group = document.createElementNS(SVG_NS, "g");
+    group.setAttribute("transform", `translate(${cx}, ${cy})`);
+    
+    renderOneBall(q, ballProps[key], group, r, localClipId, false);
+    ballGroup.appendChild(group);
+  });
+  
+  document.getElementById('quatInfo').textContent = 
+    `w=${q.w.toFixed(3)}, x=${q.x.toFixed(3)}, y=${q.y.toFixed(3)}, z=${q.z.toFixed(3)}`;
+  document.getElementById('currentBallInfo').textContent = 'All';
+  document.getElementById('scaleInfo').textContent = 'N/A (all view)';
+}
+
+function update() {
+  const x = parseFloat(document.getElementById('xRotation').value);
+  const y = parseFloat(document.getElementById('yRotation').value);
+  const z = parseFloat(document.getElementById('zRotation').value);
+  
+  document.getElementById('xAngleDisplay').textContent = `${x}°`;
+  document.getElementById('yAngleDisplay').textContent = `${y}°`;
+  document.getElementById('zAngleDisplay').textContent = `${z}°`;
+  
+  const outlineWidth = parseFloat(document.getElementById('outlineWidth').value);
+  document.getElementById('outlineDisplay').textContent = outlineWidth.toFixed(3);
+  
+  const q = Quaternion.fromEuler(x, y, z);
+  
+  if (viewMode === 'single') {
+    renderSingleView(q);
+  } else {
+    renderAllView(q);
+  }
+}
+
+function setPreset(name) {
+  const presets = {
+    'front': { x: 0, y: 0, z: 0 },
+    'back': { x: 0, y: 180, z: 0 },
+    'reset': { x: 0, y: 0, z: 0 },
+  };
+  const p = presets[name];
+  if (p) {
+    document.getElementById('xRotation').value = p.x;
+    document.getElementById('yRotation').value = p.y;
+    document.getElementById('zRotation').value = p.z;
+    update();
+  }
+}
+
+function toggleAnimate() {
+  animating = !animating;
+  document.getElementById('animateBtn').classList.toggle('active', animating);
+  if (animating) animate();
+  else if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+}
+
+let animTime = 0;
+function animate() {
+  if (!animating) return;
+  animTime += 0.02;
+  const x = Math.sin(animTime * 0.7) * 60;
+  const y = animTime * 30 % 360 - 180;
+  const z = Math.sin(animTime * 0.3) * 30;
+  document.getElementById('xRotation').value = x;
+  document.getElementById('yRotation').value = y;
+  document.getElementById('zRotation').value = z;
+  update();
+  animationId = requestAnimationFrame(animate);
+}
+
+// Event listeners
+document.getElementById('viewMode').addEventListener('change', (e) => {
+  viewMode = e.target.value;
+  const isSingle = viewMode === 'single';
+  document.getElementById('ballSelectGroup').classList.toggle('hidden', !isSingle);
+
+  update();
+});
+
+document.getElementById('ballSelect').addEventListener('change', (e) => {
+  currentBall = e.target.value;
+  update();
+});
+
+document.getElementById('xRotation').addEventListener('input', update);
+document.getElementById('yRotation').addEventListener('input', update);
+document.getElementById('zRotation').addEventListener('input', update);
+document.getElementById('outlineWidth').addEventListener('input', update);
+
+// Initial render
+update();
+</script>
+</body>
+</html>

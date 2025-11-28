@@ -563,8 +563,9 @@ export class Terminal extends Middleware<BilliardContext> {
       const group = document.createElementNS(SVG_NS, "g");
       group.classList.add("ball-group");
       
-      // Initialize state if not exists
+      // Initialize state if not exists - start with number facing camera (z-axis positive)
       if (!this.ballState.has(data.key)) {
+        // Identity quaternion means z-axis points towards viewer, which is what we want
         this.ballState.set(data.key, { 
           q: new Quaternion(), 
           pos: { ...data.position } 
@@ -714,8 +715,8 @@ export class Terminal extends Middleware<BilliardContext> {
             };
 
             // Smooth fade out at the edges to prevent popping
-            const fadeStart = 0.1 * r;
-            const fadeEnd = -0.1 * r;
+            const fadeStart = 0.05 * r;
+            const fadeEnd = -0.2 * r;
 
             if (center.z > fadeEnd) { 
               let opacity = 1;
@@ -748,8 +749,8 @@ export class Terminal extends Middleware<BilliardContext> {
           z: zAxis.z * r 
         };
 
-        const fadeStart = 0.1 * r;
-        const fadeEnd = -0.1 * r;
+        const fadeStart = 0.05 * r;
+        const fadeEnd = -0.2 * r;
 
         if (numCenter.z > fadeEnd) { // Visible
           let opacity = 1;
@@ -772,17 +773,30 @@ export class Terminal extends Middleware<BilliardContext> {
             spot.setAttribute("opacity", String(opacity));
           }
           
+          const spotScale = 0.95; // Very small shrink factor
+          
           const spotCircle = document.createElementNS(SVG_NS, "circle");
-          spotCircle.setAttribute("r", String(r * 0.6));
+          spotCircle.setAttribute("r", String(r * 0.6 * spotScale));
           spotCircle.setAttribute("fill", "white");
           spot.appendChild(spotCircle);
 
+          // Create a group for the text that counter-scales to keep text undistorted
+          const textGroup = document.createElementNS(SVG_NS, "g");
+          // Undo the squash for the text so it stays readable and centered
+          textGroup.setAttribute("transform", 
+            `rotate(${angle}) scale(${1/scale}, 1) rotate(${-angle})`
+          );
+          
           const text = document.createElementNS(SVG_NS, "text");
           text.textContent = String(number);
           text.classList.add("ball-text");
-          text.setAttribute("dy", "0");
-          text.setAttribute("font-size", String(r * 0.8));
-          spot.appendChild(text);
+          text.setAttribute("x", String(-r * 0.03));
+          text.setAttribute("y", String(r * 0.05));
+          text.setAttribute("font-size", String(r * 0.7 * scale * spotScale));
+          text.setAttribute("text-anchor", "middle");
+          text.setAttribute("dominant-baseline", "central");
+          textGroup.appendChild(text);
+          spot.appendChild(textGroup);
 
           dynamicGroup.appendChild(spot);
         }
