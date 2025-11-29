@@ -512,8 +512,29 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
     const p1Type = p1?.color || (p2?.color === 'solid' ? 'stripe' : 'solid');
     const p2Type = p2?.color || (p1?.color === 'solid' ? 'stripe' : 'solid');
 
-    this.renderCollectedBalls(this.p1BallsContainer, p1Type, this.p1PocketedBalls);
-    this.renderCollectedBalls(this.p2BallsContainer, p2Type, this.p2PocketedBalls);
+    // Calculate pocketed balls from what's NOT on the table anymore
+    // This ensures sync between server and client state
+    const ballsOnTable = new Set<number>();
+    if (this.context.balls) {
+      for (const ball of this.context.balls) {
+        const num = this.getBallNumber(ball.color);
+        if (num) ballsOnTable.add(num);
+      }
+    }
+    
+    // All solids: 1-7, stripes: 9-15
+    const allSolids = [1, 2, 3, 4, 5, 6, 7];
+    const allStripes = [9, 10, 11, 12, 13, 14, 15];
+    
+    const pocketedSolids = allSolids.filter(n => !ballsOnTable.has(n));
+    const pocketedStripes = allStripes.filter(n => !ballsOnTable.has(n));
+    
+    // Update the tracked pocketed sets based on actual game state
+    const p1Pocketed = new Set(p1Type === 'solid' ? pocketedSolids : pocketedStripes);
+    const p2Pocketed = new Set(p2Type === 'solid' ? pocketedSolids : pocketedStripes);
+
+    this.renderCollectedBalls(this.p1BallsContainer, p1Type, p1Pocketed);
+    this.renderCollectedBalls(this.p2BallsContainer, p2Type, p2Pocketed);
   }
 
   renderEmptySlots(container: HTMLElement, count: number) {

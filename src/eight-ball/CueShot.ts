@@ -34,8 +34,16 @@ export class CueShot extends Middleware<BilliardContext> {
       return;
     }
 
+    // Hide cue if it's not my turn (spectating opponent)
+    if (!isMyTurn(this.context)) {
+      if (this.context.cue) {
+        this.context.cue = null;
+      }
+      return;
+    }
+
     // Auto-spawn cue if it's my turn and missing
-    if (isMyTurn(this.context) && !this.context.cue && !this.context.gameOver) {
+    if (!this.context.cue && !this.context.gameOver) {
        const ball = this.context.balls?.find(b => b.color === 'white');
        if (ball) {
          const cue = new CueStick();

@@ -17,7 +17,7 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
     this.on("deactivate", this.handleDeactivate);
     this.on("frame-loop", this.handleFrameLoop);
 
-    this.on("update", this.sendFixedObjects);
+    this.on("update", this.handleUpdate);
     this.on("shot-start", this.handleShotStart);
     this.on("shot-end", this.handleShotEnd);
 
@@ -171,6 +171,11 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   handleShotEnd = () => {
     // Send final authoritative state after shot completes
     // This syncs any drift between client physics simulations
+    this.sendMovingObjects();
+  };
+
+  handleUpdate = () => {
+    // Send state updates (called after turn changes, ball pocketing, etc.)
     this.sendMovingObjects();
   };
 }

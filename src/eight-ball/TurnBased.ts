@@ -42,8 +42,9 @@ export class TurnBased extends Middleware<TurnBasedContext> {
     const turns = this.context.turn.turns;
     this.context.turn.current = turns[0];
     this.context.turnStartTime = Date.now();
-    const players = this.context.players.sort(() => Math.random() - 0.5);
-    for (let i = 0; i < turns.length; i++) {
+    // Assign turns in join order (first player to join = turn-one = Player 1)
+    const players = this.context.players;
+    for (let i = 0; i < turns.length && i < players.length; i++) {
       players[i].turn = turns[i];
     }
   };
