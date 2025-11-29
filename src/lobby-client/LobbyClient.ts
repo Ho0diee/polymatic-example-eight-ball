@@ -13,6 +13,7 @@ export class LobbyClient extends Middleware<LobbyClientContext> {
   playOfflineButton: HTMLElement;
   createRoomButton: HTMLElement;
   joinRoomButton: HTMLElement;
+  roomCodeInput: HTMLInputElement;
   lobbyButtons: HTMLElement;
 
   io: Socket;
@@ -30,17 +31,42 @@ export class LobbyClient extends Middleware<LobbyClientContext> {
     this.playOfflineButton = document.getElementById("play-offline");
     this.createRoomButton = document.getElementById("create-room");
     this.joinRoomButton = document.getElementById("join-room");
-    this.lobbyButtons = this.playOfflineButton.parentElement;
+    this.roomCodeInput = document.getElementById("room-code-input") as HTMLInputElement;
+    this.lobbyButtons = document.getElementById("lobby-buttons");
 
     this.playOfflineButton.addEventListener("click", this.handlePlayOffline);
     this.createRoomButton.addEventListener("click", this.handleCreateRoom);
     this.joinRoomButton.addEventListener("click", this.handleJoinRoom);
+    
+    // Allow pressing Enter in the input field to join
+    this.roomCodeInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        this.handleJoinRoom();
+      }
+    });
+
+    // Auto-format input as user types (add dashes)
+    this.roomCodeInput.addEventListener("input", this.handleRoomCodeInput);
 
     // set up io connection and listeners
     this.io = io();
     this.io.on("connect", () => console.log("connected to lobby"));
     this.io.on("room-ready", this.handleRoomReady);
   }
+
+  handleRoomCodeInput = () => {
+    let value = this.roomCodeInput.value.replace(/[^a-z0-9]/gi, "").toLowerCase();
+    if (value.length > 3) {
+      value = value.slice(0, 3) + "-" + value.slice(3);
+    }
+    if (value.length > 7) {
+      value = value.slice(0, 7) + "-" + value.slice(7);
+    }
+    if (value.length > 11) {
+      value = value.slice(0, 11);
+    }
+    this.roomCodeInput.value = value;
+  };
 
   handlePlayOffline = () => {
     if (this.room) {
@@ -72,14 +98,23 @@ export class LobbyClient extends Middleware<LobbyClientContext> {
   };
 
   handleJoinRoom = () => {
-    const input = window.prompt("Please enter room id:");
-    if (!input) return;
+    const input = this.roomCodeInput.value.trim();
+    if (!input) {
+      this.roomCodeInput.focus();
+      return;
+    }
 
     const id = normalizeRoomId(input);
 
     if (!isValidRoomId(id)) {
-      window.alert("Invalid room id: '" + input.substring(0, 12) + "' \nRoom id format is 'xxx-xxx-xxx'.");
+      alert("Invalid room code. Format: xxx-xxx-xxx");
+      this.roomCodeInput.focus();
       return;
+    }
+
+    if (this.room) {
+      Runtime.deactivate(this.room);
+      this.room = null;
     }
 
     localStorage.setItem("eight-ball-room", id);
@@ -94,6 +129,7 @@ export class LobbyClient extends Middleware<LobbyClientContext> {
 
   handleRoomLeft = () => {
     this.room = null;
-    this.lobbyButtons.style.display = "block";
+    this.lobbyButtons.style.display = "flex";
+    this.roomCodeInput.value = "";
   };
 }
