@@ -44,12 +44,17 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     this.leaveBtn = document.getElementById("leave-waiting-room");
 
     // Show waiting room and set room ID
-    this.waitingRoom.classList.remove("hidden");
-    this.waitingRoomId.textContent = this.context.room || "---";
+    if (this.waitingRoom) {
+      this.waitingRoom.classList.remove("hidden");
+      console.log("Showing waiting room for room:", this.context.room);
+    }
+    if (this.waitingRoomId) {
+      this.waitingRoomId.textContent = this.context.room || "---";
+    }
 
     // Set up copy button
-    this.copyRoomIdBtn.addEventListener("click", this.handleCopyRoomId);
-    this.leaveBtn.addEventListener("click", this.handleLeaveRoom);
+    this.copyRoomIdBtn?.addEventListener("click", this.handleCopyRoomId);
+    this.leaveBtn?.addEventListener("click", this.handleLeaveRoom);
 
     // set up auth id and secret
     // id is public and will be shared by other users, secret is private
