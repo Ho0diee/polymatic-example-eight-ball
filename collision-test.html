@@ -136,7 +136,9 @@
                             tx: Math.round(Math.cos(tRad) * 100000) / 100000,
                             ty: Math.round(Math.sin(tRad) * 100000) / 100000,
                             cx: Math.round(Math.cos(cRad) * 100000) / 100000,
-                            cy: Math.round(Math.sin(cRad) * 100000) / 100000
+                            cy: Math.round(Math.sin(cRad) * 100000) / 100000,
+                            ts: Math.round(result.targetSpeed * 100000) / 100000,
+                            cs: Math.round(result.cueSpeed * 100000) / 100000
                         };
                         validCount++;
                     }
@@ -197,6 +199,7 @@
             world.on('begin-contact', () => { hasCollided = true; });
             
             let targetAngle = null, cueAngle = null;
+            let targetSpeed = 0, cueSpeed = 0;
             
             for (let i = 0; i < 4000; i++) {
                 world.step(1/480);
@@ -215,11 +218,11 @@
                 if (collisionFrame >= 0 && i >= collisionFrame + 20 && targetAngle === null) {
                     const tv = targetBall.getLinearVelocity();
                     const cv = cueBall.getLinearVelocity();
-                    const ts = Math.sqrt(tv.x ** 2 + tv.y ** 2);
-                    const cs = Math.sqrt(cv.x ** 2 + cv.y ** 2);
+                    targetSpeed = Math.sqrt(tv.x ** 2 + tv.y ** 2);
+                    cueSpeed = Math.sqrt(cv.x ** 2 + cv.y ** 2);
                     
-                    if (ts > 0.0001) targetAngle = Math.atan2(tv.y, tv.x) * 180 / Math.PI;
-                    if (cs > 0.0001) cueAngle = Math.atan2(cv.y, cv.x) * 180 / Math.PI;
+                    if (targetSpeed > 0.0001) targetAngle = Math.atan2(tv.y, tv.x) * 180 / Math.PI;
+                    if (cueSpeed > 0.0001) cueAngle = Math.atan2(cv.y, cv.x) * 180 / Math.PI;
                     break;
                 }
             }
@@ -228,13 +231,13 @@
             if (targetAngle === null && hasCollided) {
                 const tv = targetBall.getLinearVelocity();
                 const cv = cueBall.getLinearVelocity();
-                const ts = Math.sqrt(tv.x ** 2 + tv.y ** 2);
-                const cs = Math.sqrt(cv.x ** 2 + cv.y ** 2);
-                if (ts > 0.0001) targetAngle = Math.atan2(tv.y, tv.x) * 180 / Math.PI;
-                if (cs > 0.0001) cueAngle = Math.atan2(cv.y, cv.x) * 180 / Math.PI;
+                targetSpeed = Math.sqrt(tv.x ** 2 + tv.y ** 2);
+                cueSpeed = Math.sqrt(cv.x ** 2 + cv.y ** 2);
+                if (targetSpeed > 0.0001) targetAngle = Math.atan2(tv.y, tv.x) * 180 / Math.PI;
+                if (cueSpeed > 0.0001) cueAngle = Math.atan2(cv.y, cv.x) * 180 / Math.PI;
             }
             
-            return { targetAngle, cueAngle };
+            return { targetAngle, cueAngle, targetSpeed, cueSpeed };
         }
         
         // Lookup prediction from table

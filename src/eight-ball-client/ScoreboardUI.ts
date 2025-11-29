@@ -44,7 +44,15 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
     this.on("ball-pocketed", this.handleBallPocketed);
     this.on("game-start", this.handleGameStart);
     this.on("foul", this.handleFoul);
+    this.on("game-over", this.handleGameOver);
+    this.on("shot-end", this.handleShotEnd);
   }
+
+  handleShotEnd = () => {
+    // Reset timer after every shot (whether turn changes or not)
+    this.turnStartTime = Date.now();
+    this.timeoutTriggered = false;
+  };
 
   handleActivate() {
     this.p1Section = document.getElementById("player1-section");
@@ -259,6 +267,118 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
       }, 300);
     }, 2000);
   }
+
+  handleGameOver = (data: { winner: any, loser: any, reason: string }) => {
+    const { winner, loser, reason } = data;
+    
+    // Determine which player number won
+    const p1 = this.context.players?.[0];
+    const isP1Winner = winner?.id === p1?.id;
+    const winnerNum = isP1Winner ? 1 : 2;
+    const loserNum = isP1Winner ? 2 : 1;
+    
+    // Create game over overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'game-over-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      pointer-events: auto;
+    `;
+    
+    // Different messages for win vs lose by early 8-ball
+    let mainText: string;
+    let subText: string;
+    let textColor: string;
+    let glowColor: string;
+    
+    if (reason === 'legal-8ball') {
+      mainText = `PLAYER ${winnerNum} WINS!`;
+      subText = 'Cleared all balls and sunk the 8-ball!';
+      textColor = '#4caf50';
+      glowColor = 'rgba(76, 175, 80, 0.8)';
+    } else {
+      mainText = `PLAYER ${loserNum} LOSES!`;
+      subText = 'Pocketed the 8-ball too early!';
+      textColor = '#ff3333';
+      glowColor = 'rgba(255, 51, 51, 0.8)';
+    }
+    
+    overlay.innerHTML = `
+      <style>
+        @keyframes game-over-pop {
+          0% { transform: scale(0.5); opacity: 0; }
+          50% { transform: scale(1.1); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        #game-over-main {
+          font-size: 72px;
+          font-weight: bold;
+          color: ${textColor};
+          text-shadow: 0 0 40px ${glowColor}, 0 0 80px ${glowColor}, 0 5px 20px rgba(0,0,0,0.8);
+          text-transform: uppercase;
+          letter-spacing: 12px;
+          animation: game-over-pop 0.5s ease-out;
+          margin-bottom: 20px;
+          text-align: center;
+        }
+        #game-over-sub {
+          font-size: 28px;
+          font-weight: bold;
+          color: ${textColor};
+          text-shadow: 0 0 20px ${glowColor}, 0 3px 15px rgba(0,0,0,0.8);
+          letter-spacing: 4px;
+          animation: game-over-pop 0.5s ease-out 0.1s both;
+          margin-bottom: 40px;
+          text-align: center;
+        }
+        #play-again-btn {
+          background: transparent;
+          color: ${textColor};
+          border: 3px solid ${textColor};
+          padding: 15px 40px;
+          font-size: 24px;
+          font-weight: bold;
+          letter-spacing: 4px;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+          text-transform: uppercase;
+          animation: game-over-pop 0.5s ease-out 0.2s both;
+          box-shadow: 0 0 20px ${glowColor};
+        }
+        #play-again-btn:hover {
+          transform: scale(1.1);
+          background: ${textColor};
+          color: #000;
+          box-shadow: 0 0 40px ${glowColor};
+        }
+      </style>
+      <div id="game-over-main">${mainText}</div>
+      <div id="game-over-sub">${subText}</div>
+      <button id="play-again-btn">Play Again</button>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Add click handler to button
+    const btn = document.getElementById('play-again-btn');
+    if (btn) {
+      btn.onclick = () => {
+        overlay.remove();
+        // Reload the page to start fresh
+        window.location.reload();
+      };
+    }
+  };
 
   // Track if timeout has been triggered for current turn
   timeoutTriggered: boolean = false;

@@ -117,6 +117,10 @@ export class BilliardContext {
   // Ball in hand (after foul)
   ballInHand? = false;
   foulCommitted? = false;
+  
+  // Slowmo camera focus
+  slowmoActive? = false;
+  slowmoFocus?: { x: number; y: number } | null = null;
 
   // multiplayer fields
   players?: Player[] = [];

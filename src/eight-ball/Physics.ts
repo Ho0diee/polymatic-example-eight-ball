@@ -12,11 +12,14 @@ export class Physics extends Middleware<BilliardContext> {
   world: World;
 
   time: number = 0;
-  timeStep = 1000 / 120;
+  timeStep = 1000 / 480;
 
   pocketedBalls: Ball[] = [];
 
   asleep = true;
+
+  // Break shot detection
+  isBreakShot: boolean = true; // First shot is always break
 
   constructor() {
     super();
@@ -48,7 +51,11 @@ export class Physics extends Middleware<BilliardContext> {
   handleFrameLoop(ev: { dt: number }) {
     if (!this.context.balls || !this.context.rails || !this.context.pockets) return;
     this.dataset.data([...this.context?.balls, ...this.context?.rails, , ...this.context?.pockets]);
-    this.time += ev.dt;
+    
+    // Fixed 80% speed (slightly slower than normal)
+    const effectiveDt = ev.dt * 0.8;
+    
+    this.time += effectiveDt;
     while (this.time >= this.timeStep) {
       this.time -= this.timeStep;
       if (this.asleep) continue;
@@ -77,12 +84,17 @@ export class Physics extends Middleware<BilliardContext> {
       }
     }
   }
-
   endShot() {
     if (!this.context.shotInProgress) return;
     this.context.shotInProgress = false;
     const pocketed = [...this.pocketedBalls];
     this.pocketedBalls.length = 0;
+    
+    // Reset break shot state after first shot
+    if (this.isBreakShot) {
+      this.isBreakShot = false;
+    }
+    
     this.emit("shot-end", { pocketed });
   }
 
@@ -97,8 +109,33 @@ export class Physics extends Middleware<BilliardContext> {
 
     if (!dataA || !dataB) return;
 
-    const ball = dataA.type === "ball" ? dataA : dataB.type === "ball" ? dataB : null;
+    const ball1 = dataA.type === "ball" ? dataA : null;
+    const ball2 = dataB.type === "ball" ? dataB : null;
+    const ball = ball1 || ball2;
+    const rail = dataA.type === "rail" ? dataA : dataB.type === "rail" ? dataB : null;
     const pocket = dataA.type === "pocket" ? dataA : dataB.type === "pocket" ? dataB : null;
+
+    // Ball-ball collision - emit sound event with impact velocity
+    if (ball1 && ball2) {
+      const vel1 = bA.getLinearVelocity();
+      const vel2 = bB.getLinearVelocity();
+      const relVelX = vel1.x - vel2.x;
+      const relVelY = vel1.y - vel2.y;
+      const impactSpeed = Math.sqrt(relVelX * relVelX + relVelY * relVelY);
+      if (impactSpeed > 0.05) {
+        this.emit("ball-collision", { ball1, ball2, impactSpeed });
+      }
+    }
+
+    // Ball-rail collision - emit sound event
+    if (ball && rail) {
+      const body = ball1 ? bA : bB;
+      const vel = body.getLinearVelocity();
+      const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+      if (speed > 0.08) {
+        this.emit("rail-collision", { ball, speed });
+      }
+    }
 
     if (pocket) {
       // do not apply any force to the ball

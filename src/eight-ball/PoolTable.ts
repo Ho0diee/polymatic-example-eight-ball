@@ -33,8 +33,8 @@ export class PoolTable extends Middleware<BilliardContext> {
     const rw = 1.5 * pr;
 
     const hrail = [
-      { x: pr, y: h * 0.5 },
-      { x: pr, y: h * 0.5 + rw },
+      { x: pr * 1.15, y: h * 0.5 }, // Inner corner: slightly closer to pocket
+      { x: pr * 1.15, y: h * 0.5 + rw }, // Outer corner: straight, no angle
       { x: w * 0.5 - pr / SPI4 + rw, y: h * 0.5 + rw },
       { x: w * 0.5 - pr / SPI4, y: h * 0.5 },
     ];

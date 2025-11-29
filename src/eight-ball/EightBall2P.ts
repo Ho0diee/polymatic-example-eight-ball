@@ -53,18 +53,21 @@ export class EightBall2P extends Middleware<BilliardContext> {
 
   handleShotEnd = (data: { pocketed: Ball[] }) => {
     const player = this.context.players.find((player) => player.turn === this.context.turn.current);
+    const otherPlayer = this.context.players.find((p) => p.id !== player?.id);
 
     const hasCueBall = data.pocketed.some((ball) => Color.is(ball.color, Color.white));
     const hasEightBall = data.pocketed.some((ball) => Color.is(ball.color, Color.black));
     const hasOwnBall = data.pocketed.some((ball) => Color.is(ball.color, player?.color));
+    const hasOpponentBall = data.pocketed.some((ball) => Color.is(ball.color, otherPlayer?.color));
 
     if (hasEightBall) {
+      // Check if player has cleared all their balls (8 ball should be pocketed last)
       const ownBallLeft = this.context.balls.some((ball) => Color.is(ball.color, player?.color));
-      const playerWin = !ownBallLeft;
-      const winner = playerWin ? player : this.context.players.find((p) => p.id !== player.id);
+      const playerWin = !ownBallLeft && !hasCueBall; // Must have no balls left AND not scratch
+      const winner = playerWin ? player : otherPlayer;
       this.context.gameOver = true;
       this.context.winner = winner?.id;
-      this.emit("game-over");
+      this.emit("game-over", { winner, loser: playerWin ? otherPlayer : player, reason: playerWin ? 'legal-8ball' : 'early-8ball' });
     } else if (hasCueBall) {
       // Foul! Emit foul event for UI, pass turn, then ball in hand
       this.emit("foul");
@@ -72,8 +75,13 @@ export class EightBall2P extends Middleware<BilliardContext> {
       this.context.foulCommitted = true;
       this.context.ballInHand = true;
       setTimeout(() => this.emit("ball-in-hand"), 400);
+    } else if (hasOpponentBall) {
+      // Pocketed opponent's ball (even if also pocketed own) - pass turn
+      this.emit("pass-turn");
     } else if (hasOwnBall) {
+      // Only pocketed own ball(s) - keep turn
     } else {
+      // Didn't pocket anything - pass turn
       this.emit("pass-turn");
     }
     this.emit("update");

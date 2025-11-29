@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pool Ball Distance Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 { color: #0f0; }
+        button {
+            background: #0a0;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background: #0c0; }
+        #results {
+            margin-top: 20px;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        table { border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #444; padding: 8px; text-align: right; }
+        th { background: #333; }
+        canvas { border: 2px solid #444; margin-top: 20px; background: #0d4d1a; }
+        #status { color: #ff0; font-size: 18px; margin: 10px 0; }
+        .controls { margin: 10px 0; }
+        #formula { background: #222; padding: 15px; margin: 15px 0; border-radius: 5px; }
+        #formula code { color: #0f0; font-size: 14px; }
+    </style>
+    <script src="https://unpkg.com/planck-js@0.3.27/dist/planck.min.js"></script>
+</head>
+<body>
+    <h1>🎱 Pool Ball Distance Tester</h1>
+    <p>Measures how far a cue ball travels at different power levels (no collision, straight shot)</p>
+    
+    <div class="controls">
+        <button id="runDistanceTests" style="background:#07f;font-size:20px;padding:15px 30px;">📏 Run Distance Tests</button>
+        <button id="animateShot">Animate Single Shot</button>
+        <input type="number" id="powerInput" value="1.0" step="0.1" min="0.1" max="2" style="width: 60px;"> power
+    </div>
+    
+    <div id="status">Ready - Click button to measure distances</div>
+    <div id="formula"></div>
+    <canvas id="canvas" width="900" height="200"></canvas>
+    <div id="results"></div>
+    
+    <script>
+        // ============================================
+        // EXACT PHYSICS CONSTANTS FROM THE GAME
+        // ============================================
+        const BALL_RADIUS = 0.031;
+        const LINEAR_DAMPING = 2.2;
+        const ANGULAR_DAMPING = 1.5;
+        const BALL_FRICTION = 0.1;
+        const BALL_RESTITUTION = 0.99;
+        const MAX_FORCE = 0.06;
+        const TABLE_WIDTH = 2.24;
+        const TABLE_HEIGHT = 1.12;
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
+        const resultsEl = document.getElementById('results');
+        const formulaEl = document.getElementById('formula');
+        
+        const SCALE = 350;
+        const OFFSET_X = 100;
+        const OFFSET_Y = canvas.height / 2;
+        
+        function toScreen(x, y) {
+            return [OFFSET_X + x * SCALE, OFFSET_Y - y * SCALE];
+        }
+        
+        /**
+         * Simulate a ball shot and measure total distance traveled
+         * Returns: { distance: meters traveled, finalPos: {x, y}, time: seconds }
+         */
+        function measureDistance(power) {
+            const world = new planck.World();
+            
+            // Create ball at origin
+            const ball = world.createBody({
+                type: 'dynamic',
+                bullet: true,
+                position: planck.Vec2(0, 0),
+                linearDamping: LINEAR_DAMPING,
+                angularDamping: ANGULAR_DAMPING
+            });
+            ball.createFixture({
+                shape: planck.Circle(BALL_RADIUS),
+                friction: BALL_FRICTION,
+                restitution: BALL_RESTITUTION,
+                density: 1
+            });
+            
+            // Apply impulse (shooting along +X axis)
+            const impulse = power * MAX_FORCE;
+            ball.applyLinearImpulse(planck.Vec2(impulse, 0), ball.getPosition());
+            
+            // Record initial speed
+            const initialVel = ball.getLinearVelocity();
+            const initialSpeed = Math.sqrt(initialVel.x * initialVel.x + initialVel.y * initialVel.y);
+            
+            // Simulate until ball stops
+            const timeStep = 1 / 120;
+            const maxSteps = 1200; // 10 seconds max
+            const STOP_THRESHOLD = 0.001; // Consider stopped when speed < 1mm/s
+            
+            let totalDistance = 0;
+            let lastPos = { x: 0, y: 0 };
+            let steps = 0;
+            
+            for (let i = 0; i < maxSteps; i++) {
+                world.step(timeStep);
+                steps++;
+                
+                const pos = ball.getPosition();
+                const vel = ball.getLinearVelocity();
+                const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+                
+                // Accumulate distance traveled
+                const dx = pos.x - lastPos.x;
+                const dy = pos.y - lastPos.y;
+                totalDistance += Math.sqrt(dx * dx + dy * dy);
+                lastPos = { x: pos.x, y: pos.y };
+                
+                // Check if stopped
+                if (speed < STOP_THRESHOLD) {
+                    break;
+                }
+            }
+            
+            return {
+                distance: totalDistance,
+                finalPos: lastPos,
+                time: steps * timeStep,
+                initialSpeed: initialSpeed
+            };
+        }
+        
+        /**
+         * Run distance tests for all power levels
+         */
+        function runDistanceTests() {
+            statusEl.textContent = "Running distance tests...";
+            
+            const powers = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0];
+            const results = [];
+            
+            for (const power of powers) {
+                const result = measureDistance(power);
+                results.push({
+                    power,
+                    distance: result.distance,
+                    finalX: result.finalPos.x,
+                    time: result.time,
+                    initialSpeed: result.initialSpeed
+                });
+            }
+            
+            // Display results
+            let html = '<h3>Distance Results (straight shot, no walls/collisions)</h3>';
+            html += '<table><tr><th>Power</th><th>Distance (m)</th><th>Distance (cm)</th><th>Initial Speed</th><th>Time (s)</th></tr>';
+            
+            for (const r of results) {
+                html += `<tr>
+                    <td>${r.power.toFixed(2)}</td>
+                    <td>${r.distance.toFixed(4)}</td>
+                    <td>${(r.distance * 100).toFixed(1)} cm</td>
+                    <td>${r.initialSpeed.toFixed(2)} m/s</td>
+                    <td>${r.time.toFixed(2)}</td>
+                </tr>`;
+            }
+            html += '</table>';
+            
+            // Try to fit a formula: distance = k * power
+            // With linear damping, theoretically: max_distance = initial_velocity / damping
+            // And initial_velocity = impulse / mass = (power * MAX_FORCE) / mass
+            
+            // Let's calculate the ratio distance/power for each
+            html += '<h3>Distance/Power Ratio Analysis</h3>';
+            html += '<table><tr><th>Power</th><th>Distance</th><th>Distance/Power</th></tr>';
+            
+            let sumRatio = 0;
+            for (const r of results) {
+                const ratio = r.distance / r.power;
+                sumRatio += ratio;
+                html += `<tr><td>${r.power.toFixed(2)}</td><td>${r.distance.toFixed(4)}</td><td>${ratio.toFixed(4)}</td></tr>`;
+            }
+            const avgRatio = sumRatio / results.length;
+            html += `<tr style="background:#333;font-weight:bold"><td>AVG</td><td>-</td><td>${avgRatio.toFixed(4)}</td></tr>`;
+            html += '</table>';
+            
+            resultsEl.innerHTML = html;
+            
+            // Show formula
+            formulaEl.innerHTML = `
+                <h3>📐 Derived Formula</h3>
+                <code>maxTravelDistance = power * ${avgRatio.toFixed(4)}</code><br><br>
+                <p>Examples:</p>
+                <ul>
+                    <li>Power 0.5 → ${(0.5 * avgRatio).toFixed(3)}m = ${(0.5 * avgRatio * 100).toFixed(1)}cm</li>
+                    <li>Power 1.0 → ${(1.0 * avgRatio).toFixed(3)}m = ${(1.0 * avgRatio * 100).toFixed(1)}cm</li>
+                    <li>Power 2.0 → ${(2.0 * avgRatio).toFixed(3)}m = ${(2.0 * avgRatio * 100).toFixed(1)}cm</li>
+                </ul>
+                <p><strong>For the code:</strong> <code>const maxTravel = power * ${avgRatio.toFixed(2)};</code></p>
+            `;
+            
+            // Draw visualization
+            drawResults(results);
+            
+            statusEl.textContent = `Done! Average ratio: ${avgRatio.toFixed(4)} meters per unit power`;
+            
+            // Return the coefficient for use in code
+            console.log("DISTANCE_PER_POWER_UNIT =", avgRatio);
+            return avgRatio;
+        }
+        
+        /**
+         * Draw results on canvas
+         */
+        function drawResults(results) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw scale
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 2.5; i += 0.5) {
+                const [x, y] = toScreen(i, 0);
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+                
+                ctx.fillStyle = '#888';
+                ctx.font = '12px Arial';
+                ctx.fillText(`${(i * 100).toFixed(0)}cm`, x - 15, canvas.height - 5);
+            }
+            
+            // Draw ball paths for each power
+            const colors = ['#f00', '#f60', '#fc0', '#ff0', '#cf0', '#6f0', '#0f0', '#0f6', '#0fc', '#0ff', '#06f', '#00f', '#60f', '#f0f'];
+            
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const color = colors[i % colors.length];
+                const yOffset = (i - results.length / 2) * 8;
+                
+                // Draw line from start to end
+                const [startX, startY] = toScreen(0, 0);
+                const [endX, endY] = toScreen(r.distance, 0);
+                
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(startX, startY + yOffset);
+                ctx.lineTo(endX, startY + yOffset);
+                ctx.stroke();
+                
+                // Draw ball at end
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(endX, startY + yOffset, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Label
+                ctx.fillStyle = color;
+                ctx.font = '10px Arial';
+                ctx.fillText(`p=${r.power}`, endX + 8, startY + yOffset + 3);
+            }
+            
+            // Draw start position
+            const [startX, startY] = toScreen(0, 0);
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(startX, startY, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 10px Arial';
+            ctx.fillText('START', startX - 18, startY + 25);
+        }
+        
+        /**
+         * Animate a single shot
+         */
+        function animateShot() {
+            const power = parseFloat(document.getElementById('powerInput').value);
+            statusEl.textContent = `Animating shot at power ${power}...`;
+            
+            const world = new planck.World();
+            
+            const ball = world.createBody({
+                type: 'dynamic',
+                bullet: true,
+                position: planck.Vec2(0, 0),
+                linearDamping: LINEAR_DAMPING,
+                angularDamping: ANGULAR_DAMPING
+            });
+            ball.createFixture({
+                shape: planck.Circle(BALL_RADIUS),
+                friction: BALL_FRICTION,
+                restitution: BALL_RESTITUTION,
+                density: 1
+            });
+            
+            const impulse = power * MAX_FORCE;
+            ball.applyLinearImpulse(planck.Vec2(impulse, 0), ball.getPosition());
+            
+            const timeStep = 1 / 60;
+            let totalDistance = 0;
+            let lastPos = { x: 0, y: 0 };
+            
+            function animate() {
+                world.step(timeStep);
+                
+                const pos = ball.getPosition();
+                const vel = ball.getLinearVelocity();
+                const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+                
+                const dx = pos.x - lastPos.x;
+                const dy = pos.y - lastPos.y;
+                totalDistance += Math.sqrt(dx * dx + dy * dy);
+                lastPos = { x: pos.x, y: pos.y };
+                
+                // Clear and draw
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw scale
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 2.5; i += 0.5) {
+                    const [x, y] = toScreen(i, 0);
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    ctx.stroke();
+                    ctx.fillStyle = '#888';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(`${(i * 100).toFixed(0)}cm`, x - 15, canvas.height - 5);
+                }
+                
+                // Draw ball
+                const [screenX, screenY] = toScreen(pos.x, pos.y);
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, BALL_RADIUS * SCALE, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw trail
+                ctx.strokeStyle = '#0f0';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(toScreen(0, 0)[0], toScreen(0, 0)[1]);
+                ctx.lineTo(screenX, screenY);
+                ctx.stroke();
+                
+                // Info
+                ctx.fillStyle = '#fff';
+                ctx.font = '14px Arial';
+                ctx.fillText(`Power: ${power}  Speed: ${speed.toFixed(3)} m/s  Distance: ${(totalDistance * 100).toFixed(1)} cm`, 10, 20);
+                
+                if (speed > 0.001) {
+                    requestAnimationFrame(animate);
+                } else {
+                    statusEl.textContent = `Shot complete! Total distance: ${(totalDistance * 100).toFixed(1)} cm`;
+                }
+            }
+            
+            animate();
+        }
+        
+        // Event listeners
+        document.getElementById('runDistanceTests').addEventListener('click', runDistanceTests);
+        document.getElementById('animateShot').addEventListener('click', animateShot);
+    </script>
+</body>
+</html>
