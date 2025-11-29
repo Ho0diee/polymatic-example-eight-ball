@@ -117,27 +117,32 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
       Object.assign(this.context, rest);
     } else {
       // When not in shot, sync balls from server
-      // This ensures pocketed balls are removed and positions are synced
       if (data.balls && Array.isArray(data.balls)) {
-        // Update existing balls or add new ones, remove ones not in server list
-        const serverBallKeys = new Set(data.balls.map((b: any) => b.key));
-        
-        // Remove balls that server doesn't have (pocketed)
-        if (this.context.balls) {
+        // If client has no balls yet, just use server's balls directly
+        if (!this.context.balls || this.context.balls.length === 0) {
+          this.context.balls = data.balls;
+        } else {
+          // Update existing balls or add new ones, remove ones not in server list
+          const serverBallKeys = new Set(data.balls.map((b: any) => b.key));
+          
+          // Remove balls that server doesn't have (pocketed)
           this.context.balls = this.context.balls.filter(b => serverBallKeys.has(b.key));
-        }
-        
-        // Update positions of remaining balls
-        for (const serverBall of data.balls) {
-          const localBall = this.context.balls?.find(b => b.key === serverBall.key);
-          if (localBall) {
-            localBall.position.x = serverBall.position.x;
-            localBall.position.y = serverBall.position.y;
+          
+          // Update positions of remaining balls and add any missing ones
+          for (const serverBall of data.balls) {
+            const localBall = this.context.balls.find(b => b.key === serverBall.key);
+            if (localBall) {
+              localBall.position.x = serverBall.position.x;
+              localBall.position.y = serverBall.position.y;
+            } else {
+              // Ball doesn't exist locally, add it
+              this.context.balls.push(serverBall);
+            }
           }
         }
       }
       
-      // Copy other properties
+      // Copy other properties (rails, pockets, table, etc.)
       const { balls, ...rest } = data;
       Object.assign(this.context, rest);
     }
