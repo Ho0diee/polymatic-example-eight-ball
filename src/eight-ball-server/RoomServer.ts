@@ -63,7 +63,8 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
         this.extendRoomLease();
       });
 
-      this.sendFixedObjects();
+      // Send current game state to the newly connected player
+      this.sendStateToSocket(socket);
 
       socket.on("exit-room", (data) => {
         this.context.players = this.context.players.filter((p) => p.id !== player.id);
@@ -149,6 +150,31 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
       table,
     });
     this.sendMovingObjects();
+  };
+
+  // Send full game state to a specific socket (used when player first connects)
+  sendStateToSocket = (socket: any) => {
+    const { rails, pockets, table, players, balls, shotInProgress, gameOver, gameStarted, turn, winner, turnStartTime } = this.context;
+    const compactBalls = balls?.map(b => ({
+      type: b.type,
+      key: b.key,
+      position: { x: Math.round(b.position.x * 100) / 100, y: Math.round(b.position.y * 100) / 100 },
+      color: b.color,
+      radius: b.radius
+    }));
+    socket.emit("room-update", {
+      rails,
+      pockets,
+      table,
+      players,
+      balls: compactBalls,
+      gameStarted,
+      shotInProgress,
+      gameOver,
+      turn,
+      winner,
+      turnStartTime,
+    });
   };
 
   handleUserEnter = () => {
