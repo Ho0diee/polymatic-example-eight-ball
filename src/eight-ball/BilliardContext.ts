@@ -126,4 +126,7 @@ export class BilliardContext {
   players?: Player[] = [];
   turn?: Turn;
   winner?: string;
+  
+  // Server-synced turn timer
+  turnStartTime?: number;
 }

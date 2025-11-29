@@ -50,7 +50,10 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
 
   handleShotEnd = () => {
     // Reset timer after every shot (whether turn changes or not)
-    this.turnStartTime = Date.now();
+    // Only update locally if not in online mode (server will sync turnStartTime)
+    if (!this.context.room) {
+      this.turnStartTime = Date.now();
+    }
     this.timeoutTriggered = false;
   };
 
@@ -108,7 +111,10 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
     // Detect turn change to show announcement and reset timer
     if (turn !== this.currentTurn) {
       this.currentTurn = turn;
-      this.turnStartTime = Date.now();
+      // Only use local time in offline mode; online uses server-synced turnStartTime
+      if (!this.context.room) {
+        this.turnStartTime = Date.now();
+      }
       this.timeoutTriggered = false; // Reset timeout flag for new turn
       // Don't show turn announcement if foul announcement is pending
       if (!this.foulAnnouncementPending) {
@@ -400,7 +406,12 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
     
     this.shotClock.classList.remove("hidden");
     
-    const elapsed = Date.now() - this.turnStartTime;
+    // Use server-synced time in online mode, local time in offline mode
+    const startTime = this.context.room && this.context.turnStartTime 
+      ? this.context.turnStartTime 
+      : this.turnStartTime;
+    
+    const elapsed = Date.now() - startTime;
     const remaining = Math.max(0, this.shotClockDuration - elapsed);
     const seconds = Math.ceil(remaining / 1000);
     
@@ -414,8 +425,9 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
       this.shotClock.classList.add("warning");
     }
     
-    // Check for timeout
-    if (remaining === 0 && !this.timeoutTriggered && !this.context.ballInHand) {
+    // Check for timeout - only handle locally in offline mode
+    // In online mode, server handles turn timing
+    if (!this.context.room && remaining === 0 && !this.timeoutTriggered && !this.context.ballInHand) {
       this.timeoutTriggered = true;
       this.handleTimeout();
     }

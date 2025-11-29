@@ -95,14 +95,16 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   }
 
   sendMovingObjects = () => {
-    const { balls, shotInProgress, gameOver, gameStarted, turn, winner } = this.context;
+    const { balls, shotInProgress, gameOver, gameStarted, turn, winner, turnStartTime, players } = this.context;
     this.context.io.emit("room-update", {
       balls,
+      players,
       gameStarted,
       shotInProgress,
       gameOver,
       turn,
       winner,
+      turnStartTime,
     });
   };
 

@@ -35,11 +35,13 @@ export class TurnBased extends Middleware<TurnBasedContext> {
     const currentIndex = turn.turns.indexOf(turn.current);
     const nextIndex = (currentIndex + 1) % turn.turns.length;
     turn.current = turn.turns[nextIndex];
+    this.context.turnStartTime = Date.now();
   }
 
   handleInitGame = () => {
     const turns = this.context.turn.turns;
     this.context.turn.current = turns[0];
+    this.context.turnStartTime = Date.now();
     const players = this.context.players.sort(() => Math.random() - 0.5);
     for (let i = 0; i < turns.length; i++) {
       players[i].turn = turns[i];
