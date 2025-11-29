@@ -66,7 +66,8 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
     this.turnText = document.getElementById("turn-text");
     this.shotClock = document.getElementById("shot-clock");
     
-    this.turnStartTime = Date.now();
+    // Don't start timer until game actually starts
+    this.turnStartTime = 0;
     
     // Reset pocketed balls on activate
     this.p1PocketedBalls.clear();
@@ -83,6 +84,10 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
     this.p1AnimatingBalls.clear();
     this.p2AnimatingBalls.clear();
     this.colorsAnnounced = false;
+    
+    // Reset timer when game actually starts
+    this.turnStartTime = Date.now();
+    this.timeoutTriggered = false;
     
     // Force re-render of empty slots
     if (this.p1BallsContainer) this.p1BallsContainer.dataset.state = '';
@@ -391,6 +396,12 @@ export class ScoreboardUI extends Middleware<ClientBilliardContext> {
 
   updateTimer() {
     if (!this.shotClock) return;
+    
+    // Hide clock if game hasn't started yet
+    if (!this.context.gameStarted) {
+      this.shotClock.classList.add("hidden");
+      return;
+    }
     
     // Hide clock during shot in progress
     if (this.context.shotInProgress) {

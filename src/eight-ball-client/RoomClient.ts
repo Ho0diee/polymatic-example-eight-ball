@@ -72,9 +72,14 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
   };
 
   handleServerRoomState = (data: any) => {
+    const wasGameStarted = this.context.gameStarted;
     Object.assign(this.context, data);
     if (Array.isArray(data.players) && this.context.auth) {
       this.context.player = data.players.find((p) => p.id === this.context.auth.id);
+    }
+    // Emit game-start when the game first starts
+    if (!wasGameStarted && data.gameStarted) {
+      this.emit("game-start");
     }
   };
 

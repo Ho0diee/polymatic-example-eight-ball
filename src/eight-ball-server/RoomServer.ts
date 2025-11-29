@@ -125,6 +125,7 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
     if (playersJoined && notStarted) {
       this.context.gameStarted = true;
       this.emit("game-start");
+      this.sendMovingObjects(); // Notify clients the game has started
     }
   };
 
