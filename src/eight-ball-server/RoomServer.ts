@@ -7,6 +7,8 @@ import { type ServerBilliardContext, type Auth } from "./ServerContext";
  */
 export class RoomServer extends Middleware<ServerBilliardContext> {
   inactiveRoomTimeout: any;
+  lastUpdateTime: number = 0;
+  updateInterval: number = 50; // Send updates every 50ms (20 times per second) instead of every frame
 
   constructor() {
     super();
@@ -15,6 +17,7 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
     this.on("frame-loop", this.handleFrameLoop);
 
     this.on("update", this.sendFixedObjects);
+    this.on("shot-end", this.handleShotEnd);
 
     this.on("user-enter", this.handleUserEnter);
     this.on("user-exit", this.handleUserExit);
@@ -92,14 +95,26 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
 
   handleFrameLoop() {
     if (this.context.shotInProgress) {
-      this.sendMovingObjects();
+      const now = Date.now();
+      // Throttle updates to reduce network traffic
+      if (now - this.lastUpdateTime >= this.updateInterval) {
+        this.lastUpdateTime = now;
+        this.sendMovingObjects();
+      }
     }
   }
 
   sendMovingObjects = () => {
     const { balls, shotInProgress, gameOver, gameStarted, turn, winner, turnStartTime, players } = this.context;
+    // Only send essential ball data to reduce payload size
+    const compactBalls = balls?.map(b => ({
+      key: b.key,
+      position: { x: Math.round(b.position.x * 100) / 100, y: Math.round(b.position.y * 100) / 100 },
+      color: b.color,
+      radius: b.radius
+    }));
     this.context.io.emit("room-update", {
-      balls,
+      balls: compactBalls,
       players,
       gameStarted,
       shotInProgress,
@@ -136,5 +151,10 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
       this.context.players = this.context.players.filter((p) => p.id !== data.player.id);
       this.sendFixedObjects();
     }
+  };
+
+  handleShotEnd = () => {
+    // Always send final ball positions when shot ends
+    this.sendMovingObjects();
   };
 }
