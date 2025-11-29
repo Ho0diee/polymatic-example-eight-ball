@@ -45,6 +45,8 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
         this.context.players.push(player);
       }
 
+      console.log(`Player ${player.id} joined room ${this.context.room?.id}. Total players: ${this.context.players.length}`);
+
       this.emit("user-enter", { player });
 
       socket.on("cue-shot", (data) => {
@@ -120,7 +122,7 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   };
 
   handleUserEnter = () => {
-    const playersJoined = this.context.players.length === this.context.turn.turns.length;
+    const playersJoined = this.context.players.length >= this.context.turn.turns.length;
     const notStarted = !this.context.gameStarted;
     if (playersJoined && notStarted) {
       this.context.gameStarted = true;
@@ -129,5 +131,10 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
     }
   };
 
-  handleUserExit = () => {};
+  handleUserExit = (data: { player: any }) => {
+    if (!this.context.gameStarted) {
+      this.context.players = this.context.players.filter((p) => p.id !== data.player.id);
+      this.sendFixedObjects();
+    }
+  };
 }

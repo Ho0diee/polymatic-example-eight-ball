@@ -59,13 +59,13 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     // set up auth id and secret
     // id is public and will be shared by other users, secret is private
     const auth = {} as Auth;
-    auth.id = localStorage.getItem("auth-id");
-    auth.secret = localStorage.getItem("auth-secret");
+    auth.id = sessionStorage.getItem("auth-id");
+    auth.secret = sessionStorage.getItem("auth-secret");
     if (!auth.id || !auth.secret) {
       auth.id = "player-" + nanoid(8);
       auth.secret = "secret-" + nanoid(8);
-      localStorage.setItem("auth-id", auth.id);
-      localStorage.setItem("auth-secret", auth.secret);
+      sessionStorage.setItem("auth-id", auth.id);
+      sessionStorage.setItem("auth-secret", auth.secret);
     }
 
     this.context.auth = auth;
