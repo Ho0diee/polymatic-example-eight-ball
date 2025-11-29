@@ -108,6 +108,7 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
     const { balls, shotInProgress, gameOver, gameStarted, turn, winner, turnStartTime, players } = this.context;
     // Only send essential ball data to reduce payload size
     const compactBalls = balls?.map(b => ({
+      type: b.type,
       key: b.key,
       position: { x: Math.round(b.position.x * 100) / 100, y: Math.round(b.position.y * 100) / 100 },
       color: b.color,
