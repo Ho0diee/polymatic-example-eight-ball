@@ -13,6 +13,36 @@
 <body>
   <!-- Slowmo vignette overlay -->
   <div id="slowmo-vignette"></div>
+
+  <!-- Waiting Room / Lobby Screen -->
+  <div id="waiting-room" class="hidden">
+    <div class="waiting-room-content">
+      <h2>🎱 Waiting Room</h2>
+      <div class="room-id-section">
+        <span class="room-id-label">Room Code:</span>
+        <span class="room-id-value" id="waiting-room-id">---</span>
+        <button class="copy-btn" id="copy-room-id">📋 Copy</button>
+      </div>
+      <div class="players-section">
+        <div class="player-slot" id="player-slot-1">
+          <div class="player-slot-avatar"></div>
+          <span class="player-slot-name">Waiting...</span>
+          <span class="player-slot-status"></span>
+        </div>
+        <div class="vs-divider">VS</div>
+        <div class="player-slot" id="player-slot-2">
+          <div class="player-slot-avatar"></div>
+          <span class="player-slot-name">Waiting...</span>
+          <span class="player-slot-status"></span>
+        </div>
+      </div>
+      <div class="waiting-status" id="waiting-status">
+        <div class="spinner"></div>
+        <span>Waiting for opponent to join...</span>
+      </div>
+      <button class="leave-btn" id="leave-waiting-room">Leave Room</button>
+    </div>
+  </div>
   
   <svg id="polymatic-eight-ball" class="terminal"></svg>
   
