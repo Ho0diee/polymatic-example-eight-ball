@@ -113,6 +113,10 @@ export class BilliardContext {
   gameStarted? = false;
   shotInProgress? = false;
   gameOver? = false;
+  
+  // Ball in hand (after foul)
+  ballInHand? = false;
+  foulCommitted? = false;
 
   // multiplayer fields
   players?: Player[] = [];

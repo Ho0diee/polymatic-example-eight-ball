@@ -72,24 +72,15 @@ export class CueShot extends Middleware<BilliardContext> {
   }
 
   handlePointerStart(point: { x: number; y: number }) {
-    if (!isMyTurn(this.context)) return;
-    
-    if (!this.context.cue) {
-        const ball = this.context.balls.find((ball) => ball.color === "white");
-        if (!ball) return;
-        const cue = new CueStick();
-        cue.ball = ball;
-        cue.start.x = ball.position.x;
-        cue.start.y = ball.position.y;
-        this.context.cue = cue;
-    }
-    
-    this.updateAim(point);
+    // Lock in the aim direction when starting to pull back
   }
 
   handlePointerMove(point: { x: number; y: number }) {
+    // Always update aim when not pulling back (power is 0)
     if (!this.context.cue) return;
-    this.updateAim(point);
+    if (this.power === 0) {
+      this.updateAim(point);
+    }
   }
   
   updateAim(point: { x: number; y: number }) {
@@ -100,9 +91,14 @@ export class CueShot extends Middleware<BilliardContext> {
     const dy = point.y - cue.start.y;
     const len = Math.sqrt(dx * dx + dy * dy);
     
-    if (len > 0.001) {
-        this.aimVector.x = dx / len;
-        this.aimVector.y = dy / len;
+    // Minimum distance threshold to avoid jitter when pointer is too close to cue ball
+    const minDistance = 0.02;
+    
+    if (len > minDistance) {
+        // Mouse controls the BACK of the stick, so aim is OPPOSITE to mouse direction
+        // This gives precise control like holding the back of the cue
+        this.aimVector.x = -dx / len;
+        this.aimVector.y = -dy / len;
     }
     
     this.updateCuePosition();

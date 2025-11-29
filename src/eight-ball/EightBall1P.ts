@@ -30,7 +30,11 @@ export class EightBall1P extends Middleware<BilliardContext> {
       this.context.gameOver = true;
       this.emit("game-over");
     } else if (isCueBall) {
-      setTimeout(() => this.emit("init-cue-ball"), 400);
+      // Foul! Emit foul event for UI, then ball in hand
+      this.emit("foul");
+      this.context.foulCommitted = true;
+      this.context.ballInHand = true;
+      setTimeout(() => this.emit("ball-in-hand"), 400);
     }
     this.emit("update");
   };

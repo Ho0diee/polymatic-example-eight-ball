@@ -58,8 +58,17 @@ export class Physics extends Middleware<BilliardContext> {
     if (!this.asleep) {
       let asleep = true;
       for (let b = this.world.getBodyList(); b && asleep; b = b.getNext()) {
-        if (!b.isStatic() && b.isAwake()) {
-          asleep = false;
+        if (!b.isStatic()) {
+          const vel = b.getLinearVelocity();
+          const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+          // Consider ball stopped if speed is below threshold (faster shot ending)
+          if (speed > 0.015) {
+            asleep = false;
+          } else {
+            // Force stop very slow balls
+            b.setLinearVelocity({ x: 0, y: 0 });
+            b.setAngularVelocity(0);
+          }
         }
       }
       this.asleep = asleep;
@@ -103,6 +112,8 @@ export class Physics extends Middleware<BilliardContext> {
       if (index >= 0) {
         this.context.balls.splice(index, 1);
       }
+      // Emit immediately so UI can update, include pocket position for animation
+      this.emit("ball-pocketed", { ball, pocket });
     }
   };
 
@@ -117,8 +128,8 @@ export class Physics extends Middleware<BilliardContext> {
         type: "dynamic",
         bullet: true,
         position: data.position,
-        linearDamping: 1.5,
-        angularDamping: 1,
+        linearDamping: 2.2,
+        angularDamping: 1.5,
         userData: data,
       });
       body.createFixture({

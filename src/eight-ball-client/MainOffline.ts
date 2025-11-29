@@ -1,7 +1,8 @@
 import { Middleware } from "polymatic";
 
 import { PoolTable } from "../eight-ball/PoolTable";
-import { EightBall1P } from "../eight-ball/EightBall1P";
+import { EightBall2P } from "../eight-ball/EightBall2P";
+import { TurnBased } from "../eight-ball/TurnBased";
 import { Terminal } from "./Terminal";
 import { FrameLoop } from "./FrameLoop";
 import { CueShot } from "../eight-ball/CueShot";
@@ -20,7 +21,8 @@ export class MainOffline extends Middleware<BilliardContext> {
     this.use(new FrameLoop());
     this.use(new PoolTable());
     this.use(new Rack());
-    this.use(new EightBall1P());
+    this.use(new EightBall2P());
+    this.use(new TurnBased());
     this.use(new Physics());
     this.use(new CueShot());
     this.use(new Terminal());
@@ -30,6 +32,12 @@ export class MainOffline extends Middleware<BilliardContext> {
   }
 
   handleActivate = () => {
+    // Initialize players for offline hotseat
+    this.context.players = [
+      { id: "player1", name: "Player 1" },
+      { id: "player2", name: "Player 2" }
+    ];
+    
     this.context.gameStarted = true;
     this.emit("game-start");
   };

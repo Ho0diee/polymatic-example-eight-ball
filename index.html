@@ -13,65 +13,81 @@
 <body>
   <svg id="polymatic-eight-ball" class="terminal"></svg>
   
-  <!-- Top Bar -->
+  <!-- Top Bar UI -->
   <div id="top-bar">
-    <div class="player-section">
-      <div class="turn-indicator active"></div>
-      <div class="avatar"></div>
-      <div class="ball-indicators" id="player1-balls">
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
+    <!-- Player 1 Section -->
+    <div class="player-section left active" id="player1-section">
+      <div class="section-glow"></div>
+      <div class="avatar-container">
+        <div class="avatar-img"></div>
+      </div>
+      <div class="player-details">
+        <div class="name-row">
+          <span class="player-name">Player 1</span>
+        </div>
+        <div class="specific-balls" id="player1-balls">
+          <!-- Balls appear here as they are pocketed -->
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+        </div>
       </div>
     </div>
-    <div class="game-stats">
-      <div class="stat-box multiplier">x1</div>
-      <div class="stat-box score">0</div>
-      <div class="stat-box time">0:00</div>
-    </div>
-    <div class="player-section opponent">
-      <div class="ball-indicators" id="player2-balls">
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
-        <div class="ball-slot filled"></div>
+
+    <!-- Shot Clock -->
+    <div class="shot-clock" id="shot-clock">10</div>
+
+    <!-- Player 2 Section -->
+    <div class="player-section right" id="player2-section">
+      <div class="section-glow"></div>
+      <div class="player-details">
+        <div class="name-row">
+          <span class="player-name">Player 2</span>
+        </div>
+        <div class="specific-balls" id="player2-balls">
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+          <div class="mini-ball empty-slot"></div>
+        </div>
       </div>
-      <div class="avatar"></div>
-      <div class="turn-indicator"></div>
+      <div class="avatar-container">
+        <div class="avatar-img"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Side Controls -->
+  <!-- Turn Announcement Overlay -->
+  <div class="turn-announcement" id="turn-announcement">
+    <div class="turn-text" id="turn-text">Player 1's Turn</div>
+  </div>
+
+  <!-- Power Bar (Left Side) -->
   <div id="controls-left">
-    <div class="power-bar-container">
-      <div class="power-bar"></div>
-      <div class="power-indicator" style="bottom: 50%"></div>
-    </div>
-  </div>
-
-  <div id="controls-right">
-    <div class="spin-control">
-      <div class="spin-circle">
-        <div class="spin-dot"></div>
-        <div class="spin-arrow top"></div>
-        <div class="spin-arrow right"></div>
-        <div class="spin-arrow bottom"></div>
-        <div class="spin-arrow left"></div>
+    <div class="power-bar-container" id="power-bar-left">
+      <div class="power-track">
+        <div class="power-segment"></div>
+        <div class="power-segment"></div>
+        <div class="power-segment"></div>
+        <div class="power-segment"></div>
+        <div class="power-segment"></div>
       </div>
+      <div class="power-handle"></div>
     </div>
-    <button id="smash-button">Smash</button>
   </div>
 
   <div style="position: absolute; top: 4em; left: 0.5em;">
     <div id="game-status"></div>
     <div id="room-status"></div>
+    <button id="dev-prediction-btn" style="margin-top: 10px; padding: 5px 10px; background: #333; color: #fff; border: 1px solid #666; cursor: pointer; font-size: 12px;">Show Prediction Test</button>
+    <div id="dev-prediction-info" style="margin-top: 5px; font-size: 11px; color: #aaa;"></div>
   </div>
   <div style="position: absolute; bottom: 0.5em; left: 0.5em; z-index: 10;">
     <button id="play-offline">Play Offline</button>

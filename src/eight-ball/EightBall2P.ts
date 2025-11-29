@@ -10,6 +10,7 @@ export class EightBall2P extends Middleware<BilliardContext> {
     super();
     this.on("activate", this.handleActivate);
     this.on("game-start", this.handleGameStart);
+    this.on("ball-pocketed", this.handleBallPocketed);
     this.on("shot-end", this.handleShotEnd);
   }
 
@@ -20,9 +21,35 @@ export class EightBall2P extends Middleware<BilliardContext> {
 
   handleGameStart() {
     this.emit("init-cue-ball");
-    this.context.players[0].color = Color.stripe;
-    this.context.players[1].color = Color.solid;
+    // Don't assign colors at start - they get assigned when first ball is pocketed
   }
+
+  handleBallPocketed = (data: { ball: Ball }) => {
+    const ball = data.ball;
+    
+    // Skip cue ball and 8 ball for color assignment
+    if (ball.color === Color.white || ball.color === Color.black) return;
+    
+    // Check if colors already assigned
+    const colorsAssigned = this.context.players[0]?.color || this.context.players[1]?.color;
+    if (colorsAssigned) return;
+    
+    // Find current player
+    const player = this.context.players.find((p) => p.turn === this.context.turn.current);
+    if (!player) return;
+    
+    // Assign color based on what was pocketed
+    const isSolid = Color.is(ball.color, Color.solid);
+    player.color = isSolid ? Color.solid : Color.stripe;
+    
+    // Assign opposite to other player
+    const otherPlayer = this.context.players.find(p => p.id !== player.id);
+    if (otherPlayer) {
+      otherPlayer.color = isSolid ? Color.stripe : Color.solid;
+    }
+    
+    this.emit("update");
+  };
 
   handleShotEnd = (data: { pocketed: Ball[] }) => {
     const player = this.context.players.find((player) => player.turn === this.context.turn.current);
@@ -39,8 +66,12 @@ export class EightBall2P extends Middleware<BilliardContext> {
       this.context.winner = winner?.id;
       this.emit("game-over");
     } else if (hasCueBall) {
+      // Foul! Emit foul event for UI, pass turn, then ball in hand
+      this.emit("foul");
       this.emit("pass-turn");
-      setTimeout(() => this.emit("init-cue-ball"), 400);
+      this.context.foulCommitted = true;
+      this.context.ballInHand = true;
+      setTimeout(() => this.emit("ball-in-hand"), 400);
     } else if (hasOwnBall) {
     } else {
       this.emit("pass-turn");

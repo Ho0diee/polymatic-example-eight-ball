@@ -173,6 +173,8 @@
       <input type="range" id="outlineWidth" min="0" max="0.1" step="0.002" value="0.02">
     </div>
 
+
+
     
     <div class="control-group">
       <label>Actions</label>
@@ -322,95 +324,351 @@ function renderOneBall(q, props, targetGroup, r, clipId, useSliders = false) {
   dynamicGroup.setAttribute("clip-path", `url(#${clipId})`);
   targetGroup.appendChild(dynamicGroup);
   
-  const xAxis = q.rotateVector({ x: 1, y: 0, z: 0 });
-  const yAxis = q.rotateVector({ x: 0, y: 1, z: 0 });
-  const zAxis = q.rotateVector({ x: 0, y: 0, z: 1 });
+  let xAxis = q.rotateVector({ x: 1, y: 0, z: 0 });
+  let yAxis = q.rotateVector({ x: 0, y: 1, z: 0 });
+  let zAxis = q.rotateVector({ x: 0, y: 0, z: 1 });
+  
+  // For stripes: apply a subtle constant "viewing angle" offset so the caps
+  // always appear slightly curved (like viewing from slightly above)
+  // This is mathematically equivalent to rotating the stripe axes by a tiny pitch
+  if (props.type === 'stripe') {
+    const curveBias = 0.12; // Small visual curve bias
+    // Mix a tiny bit of Z into Y (makes caps appear viewed from slight angle)
+    const origY = { ...yAxis };
+    const origZ = { ...zAxis };
+    yAxis = {
+      x: origY.x + origZ.x * curveBias,
+      y: origY.y + origZ.y * curveBias,
+      z: origY.z + origZ.z * curveBias
+    };
+    // Renormalize to keep on unit sphere
+    const yLen = Math.sqrt(yAxis.x ** 2 + yAxis.y ** 2 + yAxis.z ** 2);
+    yAxis.x /= yLen; yAxis.y /= yLen; yAxis.z /= yLen;
+  }
   
   const getMatrix = (basisX, basisY, center) => 
     `matrix(${basisX.x},${basisX.y},${basisY.x},${basisY.y},${center.x},${center.y})`;
   
   if (props.type === 'stripe') {
     // Stripes are white caps at the poles (top and bottom of the ball)
-    // The stripe band is the colored area around the equator
-    // We draw white caps that cover the top and bottom portions
-    const stripeStart = r * 0.35; // Where the colored stripe starts (from center)
-    const steps = 24;
+    // The cap is a SPHERICAL surface that wraps around the ball
+    const stripeStart = r * 0.57; // Where the colored stripe starts (from center)
     
-    const drawCapStack = (sign) => {
-      for (let i = 0; i < steps; i++) {
-        const t = i / (steps - 1);
-        // h goes from stripeStart to r (the pole)
-        const h = stripeStart + (r - stripeStart) * t;
-        const sliceRadius = Math.sqrt(r * r - h * h);
+    const drawCap = (sign) => {
+      // The cap is visible if ANY part of it is on the front of the ball
+      const capEdgeRadius = Math.sqrt(r * r - stripeStart * stripeStart);
+      const edgeCenterZ = yAxis.z * sign * stripeStart;
+      const edgeReach = capEdgeRadius * Math.sqrt(xAxis.z * xAxis.z + zAxis.z * zAxis.z);
+      const maxZ = edgeCenterZ + edgeReach;
+      
+      if (maxZ > 0) {
+        // Strategy: Draw a filled shape by tracing:
+        // 1. The visible arc of the stripe boundary (outer edge)
+        // 2. The ball silhouette where cap is clipped (inner edge = z=0 intersection)
         
-        // Caps are positioned along the Y axis (perpendicular to number which is on Z)
-        const center = {
-          x: yAxis.x * sign * h,
-          y: yAxis.y * sign * h,
-          z: yAxis.z * sign * h
-        };
+        const arcSamples = 200;
         
-        // Only draw if this slice is facing the camera
-        // But we need to check if ANY part of this slice disc is visible
-        // A disc at height h along Y-axis is visible if it's not completely behind
-        if (center.z > -sliceRadius * 0.5) {
-          const cap = document.createElementNS(SVG_NS, "circle");
-          cap.setAttribute("transform", getMatrix(xAxis, zAxis, center));
-          cap.setAttribute("r", String(sliceRadius));
-          cap.setAttribute("fill", "white");
-          // Fade out slices that are mostly behind
-          if (center.z < 0) {
-            const opacity = 1 + center.z / (sliceRadius * 0.5);
-            cap.setAttribute("opacity", String(Math.max(0, opacity)));
+        // Get all points on the stripe boundary circle
+        const outerArc = [];
+        for (let j = 0; j <= arcSamples; j++) {
+          const theta = (j / arcSamples) * Math.PI * 2;
+          const cosT = Math.cos(theta);
+          const sinT = Math.sin(theta);
+          
+          const px = xAxis.x * capEdgeRadius * cosT + yAxis.x * stripeStart * sign + zAxis.x * capEdgeRadius * sinT;
+          const py = xAxis.y * capEdgeRadius * cosT + yAxis.y * stripeStart * sign + zAxis.y * capEdgeRadius * sinT;
+          const pz = xAxis.z * capEdgeRadius * cosT + yAxis.z * stripeStart * sign + zAxis.z * capEdgeRadius * sinT;
+          
+          outerArc.push({ x: px, y: py, z: pz, theta });
+        }
+        
+        // Find contiguous visible segment(s) of outer arc
+        // First, find where visibility changes
+        const transitions = [];
+        for (let j = 0; j < arcSamples; j++) {
+          const curr = outerArc[j].z >= 0;
+          const next = outerArc[j + 1].z >= 0;
+          if (curr !== next) {
+            transitions.push({ idx: j, toVisible: next });
           }
-          dynamicGroup.appendChild(cap);
+        }
+        
+        // Check if whole circle is visible or invisible
+        const allVisible = outerArc.every(p => p.z >= 0);
+        const noneVisible = outerArc.every(p => p.z < 0);
+        
+        if (noneVisible) {
+          // Cap is fully behind ball - draw nothing (but wait, maxZ > 0 check should prevent this)
+          // This can happen if cap surface is visible but boundary isn't
+          // In this case, we need to draw cap clipped by horizon on ALL sides
+          // For simplicity, skip for now
+          return;
+        }
+        
+        if (allVisible) {
+          // Draw the full boundary as a filled shape
+          // Add a slight fake curve when near 0° pitch for visual appeal
+          const flatness = Math.abs(yAxis.z); // 0 = edge-on, 1 = face-on
+          const fakeCurve = (1 - flatness) * 0.08 * r; // Curve when flat
+          
+          let d = `M ${outerArc[0].x} ${outerArc[0].y}`;
+          for (let k = 1; k < outerArc.length; k++) {
+            // Add slight inward curve toward ball center (perpendicular to edge)
+            const t = k / outerArc.length;
+            const curveFactor = Math.sin(t * Math.PI) * fakeCurve;
+            // Push toward ball center (0,0) by scaling point inward
+            const px = outerArc[k].x;
+            const py = outerArc[k].y;
+            const dist = Math.sqrt(px * px + py * py);
+            const scale = dist > 0 ? (dist - curveFactor * sign) / dist : 1;
+            d += ` L ${px * scale} ${py * scale}`;
+          }
+          d += ' Z';
+          
+          const path = document.createElementNS(SVG_NS, "path");
+          path.setAttribute("d", d);
+          path.setAttribute("fill", "white");
+          dynamicGroup.appendChild(path);
+        } else {
+          // Partial visibility - draw crescent
+          // Need to find the contiguous visible segment, handling wrap-around
+          
+          // Find first transition from invisible to visible
+          let firstVisibleIdx = -1;
+          for (let j = 0; j < arcSamples; j++) {
+            const curr = outerArc[j].z >= 0;
+            const prev = outerArc[(j - 1 + arcSamples) % arcSamples].z >= 0;
+            if (curr && !prev) {
+              firstVisibleIdx = j;
+              break;
+            }
+          }
+          
+          // If no transition found, find any visible point
+          if (firstVisibleIdx === -1) {
+            for (let j = 0; j < outerArc.length; j++) {
+              if (outerArc[j].z >= 0) {
+                firstVisibleIdx = j;
+                break;
+              }
+            }
+          }
+          
+          if (firstVisibleIdx === -1) return;
+          
+          // Collect all contiguous visible points starting from firstVisibleIdx
+          const visibleOuter = [];
+          for (let j = 0; j < arcSamples; j++) {
+            const idx = (firstVisibleIdx + j) % arcSamples;
+            if (outerArc[idx].z >= 0) {
+              visibleOuter.push(outerArc[idx]);
+            } else {
+              break; // Stop at first invisible point
+            }
+          }
+          
+          // Check if we have at least 2 points
+          if (visibleOuter.length < 2) return;
+          
+          const startPt = visibleOuter[0];
+          const endPt = visibleOuter[visibleOuter.length - 1];
+          
+          // Generate inner arc along ball silhouette from endPt to startPt
+          // The silhouette is the circle x² + y² = r², z = 0
+          const startAngle = Math.atan2(startPt.y, startPt.x);
+          const endAngle = Math.atan2(endPt.y, endPt.x);
+          
+          // We want the SHORTER arc from endAngle to startAngle
+          // This closes the crescent on the near side of the ball
+          
+          // Try both directions, pick the one with smaller absolute angle
+          let da1 = startAngle - endAngle;
+          let da2 = da1 > 0 ? da1 - 2 * Math.PI : da1 + 2 * Math.PI;
+          
+          // Pick whichever has smaller magnitude (shorter arc)
+          let da = Math.abs(da1) < Math.abs(da2) ? da1 : da2;
+          
+          const innerArc = [];
+          const innerSamples = Math.max(20, Math.abs(Math.round(da * 20)));
+          for (let k = 0; k <= innerSamples; k++) {
+            const t = k / innerSamples;
+            const angle = endAngle + da * t;
+            innerArc.push({ x: r * Math.cos(angle), y: r * Math.sin(angle) });
+          }
+          
+          // Build path: outer arc forward, then inner arc (from end to start)
+          let d = `M ${visibleOuter[0].x} ${visibleOuter[0].y}`;
+          for (let k = 1; k < visibleOuter.length; k++) {
+            d += ` L ${visibleOuter[k].x} ${visibleOuter[k].y}`;
+          }
+          for (let k = 0; k < innerArc.length; k++) {
+            d += ` L ${innerArc[k].x} ${innerArc[k].y}`;
+          }
+          d += ' Z';
+          
+          const path = document.createElementNS(SVG_NS, "path");
+          path.setAttribute("d", d);
+          path.setAttribute("fill", "white");
+          dynamicGroup.appendChild(path);
         }
       }
     };
-    drawCapStack(1);  // Top cap
-    drawCapStack(-1); // Bottom cap
+    drawCap(1);  // Top cap
+    drawCap(-1); // Bottom cap
   }
   
   if (props.number !== null) {
-    const numCenter = { x: zAxis.x * r, y: zAxis.y * r, z: zAxis.z * r };
+    const spotScale = 0.95;
+    const dotRadius = r * 0.48 * spotScale; // Radius of number dot on ball surface
     
-    if (numCenter.z > 0) {
-      const scale = Math.max(0.01, numCenter.z / r);
+    // Calculate visibility - dot can be visible even if center is behind
+    const dotAngularRadius = Math.asin(Math.min(dotRadius / r, 1));
+    const dotCenterDist = r * Math.cos(dotAngularRadius);
+    const dotPlaneRadius = r * Math.sin(dotAngularRadius);
+    
+    // Check if ANY part of the dot is visible
+    // The dot edge can reach further forward than the center
+    const dotEdgeReach = dotPlaneRadius * Math.sqrt(xAxis.z * xAxis.z + yAxis.z * yAxis.z);
+    const dotCenterZ = zAxis.z * dotCenterDist;
+    const dotMaxZ = dotCenterZ + dotEdgeReach;
+    
+    if (dotMaxZ > 0) {
+      const numCenter = { x: zAxis.x * r, y: zAxis.y * r, z: zAxis.z * r };
+      const scale = Math.max(0.01, Math.abs(numCenter.z) / r);
       const angle = Math.atan2(numCenter.y, numCenter.x) * 180 / Math.PI;
       
       if (useSliders) {
         document.getElementById('scaleInfo').textContent = scale.toFixed(3);
       }
       
-      const spot = document.createElementNS(SVG_NS, "g");
-      spot.setAttribute("transform",
-        `translate(${numCenter.x}, ${numCenter.y}) rotate(${angle}) scale(${scale}, 1) rotate(${-angle})`
-      );
+      // Sample points around the dot circle
+      const arcSamples = 100;
+      const dotPoints = [];
       
-      const spotScale = 0.95;
-      const spotCircle = document.createElementNS(SVG_NS, "circle");
-      spotCircle.setAttribute("r", String(r * 0.48 * spotScale));
-      spotCircle.setAttribute("fill", "white");
-      spot.appendChild(spotCircle);
+      for (let j = 0; j <= arcSamples; j++) {
+        const theta = (j / arcSamples) * Math.PI * 2;
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+        
+        const px = xAxis.x * dotPlaneRadius * cosT + yAxis.x * dotPlaneRadius * sinT + zAxis.x * dotCenterDist;
+        const py = xAxis.y * dotPlaneRadius * cosT + yAxis.y * dotPlaneRadius * sinT + zAxis.y * dotCenterDist;
+        const pz = xAxis.z * dotPlaneRadius * cosT + yAxis.z * dotPlaneRadius * sinT + zAxis.z * dotCenterDist;
+        
+        dotPoints.push({ x: px, y: py, z: pz });
+      }
       
-      // Text follows the same squash transform as the circle (no counter-scale)
-      const text = document.createElementNS(SVG_NS, "text");
-      text.textContent = String(props.number);
-      text.classList.add("ball-text");
+      // Check if all points visible
+      const allVisible = dotPoints.every(p => p.z >= 0);
       
-      let xOffset, yOffset, textSizeVal;
-      const adj = getAdjustment(String(props.number));
-      xOffset = adj.x;
-      yOffset = adj.y;
-      textSizeVal = adj.size;
+      if (allVisible) {
+        // Draw full circle
+        let d = `M ${dotPoints[0].x} ${dotPoints[0].y}`;
+        for (let k = 1; k < dotPoints.length; k++) {
+          d += ` L ${dotPoints[k].x} ${dotPoints[k].y}`;
+        }
+        d += ' Z';
+        
+        const dotPath = document.createElementNS(SVG_NS, "path");
+        dotPath.setAttribute("d", d);
+        dotPath.setAttribute("fill", "white");
+        dynamicGroup.appendChild(dotPath);
+      } else {
+        // Partial visibility - use same technique as stripe caps
+        // Find first visible point after a transition
+        let firstVisibleIdx = -1;
+        for (let j = 0; j < arcSamples; j++) {
+          const curr = dotPoints[j].z >= 0;
+          const prev = dotPoints[(j - 1 + arcSamples) % arcSamples].z >= 0;
+          if (curr && !prev) {
+            firstVisibleIdx = j;
+            break;
+          }
+        }
+        
+        if (firstVisibleIdx === -1) {
+          for (let j = 0; j < dotPoints.length; j++) {
+            if (dotPoints[j].z >= 0) {
+              firstVisibleIdx = j;
+              break;
+            }
+          }
+        }
+        
+        if (firstVisibleIdx !== -1) {
+          // Collect contiguous visible points
+          const visibleOuter = [];
+          for (let j = 0; j < arcSamples; j++) {
+            const idx = (firstVisibleIdx + j) % arcSamples;
+            if (dotPoints[idx].z >= 0) {
+              visibleOuter.push(dotPoints[idx]);
+            } else {
+              break;
+            }
+          }
+          
+          if (visibleOuter.length >= 2) {
+            const startPt = visibleOuter[0];
+            const endPt = visibleOuter[visibleOuter.length - 1];
+            
+            // Inner arc along ball silhouette
+            const startAngle = Math.atan2(startPt.y, startPt.x);
+            const endAngle = Math.atan2(endPt.y, endPt.x);
+            
+            let da1 = startAngle - endAngle;
+            let da2 = da1 > 0 ? da1 - 2 * Math.PI : da1 + 2 * Math.PI;
+            let da = Math.abs(da1) < Math.abs(da2) ? da1 : da2;
+            
+            const innerArc = [];
+            const innerSamples = Math.max(20, Math.abs(Math.round(da * 20)));
+            for (let k = 0; k <= innerSamples; k++) {
+              const t = k / innerSamples;
+              const ang = endAngle + da * t;
+              innerArc.push({ x: r * Math.cos(ang), y: r * Math.sin(ang) });
+            }
+            
+            // Build path
+            let d = `M ${visibleOuter[0].x} ${visibleOuter[0].y}`;
+            for (let k = 1; k < visibleOuter.length; k++) {
+              d += ` L ${visibleOuter[k].x} ${visibleOuter[k].y}`;
+            }
+            for (let k = 0; k < innerArc.length; k++) {
+              d += ` L ${innerArc[k].x} ${innerArc[k].y}`;
+            }
+            d += ' Z';
+            
+            const dotPath = document.createElementNS(SVG_NS, "path");
+            dotPath.setAttribute("d", d);
+            dotPath.setAttribute("fill", "white");
+            dynamicGroup.appendChild(dotPath);
+          }
+        }
+      }
       
-      text.setAttribute("x", String(xOffset));
-      text.setAttribute("y", String(yOffset));
-      text.setAttribute("font-size", String(r * textSizeVal * spotScale));
-      text.setAttribute("text-anchor", "middle");
-      text.setAttribute("dominant-baseline", "central");
-      spot.appendChild(text);
-      dynamicGroup.appendChild(spot);
+      // Text - only show when center is in front (text can't be clipped)
+      if (numCenter.z > 0) {
+        const spot = document.createElementNS(SVG_NS, "g");
+        spot.setAttribute("transform",
+          `translate(${numCenter.x}, ${numCenter.y}) rotate(${angle}) scale(${scale}, 1) rotate(${-angle})`
+        );
+        
+        const text = document.createElementNS(SVG_NS, "text");
+        text.textContent = String(props.number);
+        text.classList.add("ball-text");
+        
+        let xOffset, yOffset, textSizeVal;
+        const adj = getAdjustment(String(props.number));
+        xOffset = adj.x;
+        yOffset = adj.y;
+        textSizeVal = adj.size;
+        
+        text.setAttribute("x", String(xOffset));
+        text.setAttribute("y", String(yOffset));
+        text.setAttribute("font-size", String(r * textSizeVal * spotScale));
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("dominant-baseline", "central");
+        spot.appendChild(text);
+        dynamicGroup.appendChild(spot);
+      }
     }
   }
   

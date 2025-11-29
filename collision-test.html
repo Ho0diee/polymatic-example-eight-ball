@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pool Collision Angle Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 { color: #0f0; }
+        button {
+            background: #0a0;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background: #0c0; }
+        #results {
+            margin-top: 20px;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        table { border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #444; padding: 8px; text-align: right; }
+        th { background: #333; }
+        .good { color: #0f0; }
+        .warning { color: #ff0; }
+        .bad { color: #f00; }
+        canvas { border: 2px solid #444; margin-top: 20px; background: #0d4d1a; }
+        #status { color: #ff0; font-size: 18px; margin: 10px 0; }
+        .controls { margin: 10px 0; }
+    </style>
+    <script src="https://unpkg.com/planck-js@0.3.27/dist/planck.min.js"></script>
+</head>
+<body>
+    <h1>🎱 Pool Collision Angle Tester</h1>
+    <p>Uses the EXACT same physics as the game (Planck.js with same constants)</p>
+    
+    <div class="controls">
+        <button id="buildLookup" style="background:#07f;font-size:20px;padding:15px 30px;">⬇️ Build & Download Lookup Table JSON</button>
+    </div>
+    <div class="controls">
+        <button id="runTests">Run Angle Tests</button>
+        <button id="runSpeedTests">Run Speed Tests</button>
+        <button id="runFullMatrix">Run FULL Matrix</button>
+        <button id="runSingle">Test Single</button>
+        <input type="number" id="angleInput" value="30" style="width: 50px;">° 
+        <input type="number" id="powerInput" value="1.0" step="0.1" min="0.1" max="2" style="width: 50px;"> power
+        <button id="animateShot">Animate</button>
+    </div>
+    
+    <div id="status">Ready - Click a button to test</div>
+    <canvas id="canvas" width="900" height="500"></canvas>
+    <div id="results"></div>
+    
+    <script>
+        // ============================================
+        // EXACT PHYSICS CONSTANTS FROM THE GAME
+        // ============================================
+        const BALL_RADIUS = 0.031;
+        const LINEAR_DAMPING = 2.2;
+        const ANGULAR_DAMPING = 1.5;
+        const BALL_FRICTION = 0.1;
+        const BALL_RESTITUTION = 0.99;
+        const MAX_FORCE = 0.06;
+        const TABLE_WIDTH = 2.24;
+        const TABLE_HEIGHT = 1.12;
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
+        const resultsEl = document.getElementById('results');
+        
+        const SCALE = 350;
+        const OFFSET_X = canvas.width / 2;
+        const OFFSET_Y = canvas.height / 2;
+        
+        function toScreen(x, y) {
+            return [OFFSET_X + x * SCALE, OFFSET_Y - y * SCALE];
+        }
+        
+        // ============================================
+        // PHYSICS LOOKUP TABLE
+        // Built from actual simulation results
+        // Key: "angle_power" -> { tx, ty, cx, cy } unit vectors
+        // ============================================
+        let physicsLookupTable = {};
+        
+        // Load existing lookup table on startup
+        (async function loadLookupTable() {
+            try {
+                const response = await fetch('physics-lookup.json');
+                if (response.ok) {
+                    physicsLookupTable = await response.json();
+                    const count = Object.keys(physicsLookupTable).length;
+                    statusEl.textContent = `✅ Loaded physics-lookup.json with ${count} entries`;
+                    console.log(`Loaded ${count} lookup entries`);
+                }
+            } catch (e) {
+                console.log('No physics-lookup.json found, table is empty');
+            }
+        })();
+        
+        function buildLookupTable() {
+            statusEl.textContent = 'Building physics lookup table... This takes ~30 seconds.';
+            physicsLookupTable = {};
+            
+            // Test EVERY degree from -89 to 89 (0 is straight shot, 90 would be a miss)
+            const angles = [];
+            for (let a = -89; a <= 89; a += 1) angles.push(a);
+            
+            const powers = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0];
+            
+            let validCount = 0;
+            let totalTests = angles.length * powers.length;
+            let testNum = 0;
+            
+            // Process all tests
+            for (const angle of angles) {
+                for (const power of powers) {
+                    testNum++;
+                    const result = runPhysicsOnly(angle, power);
+                    if (result.targetAngle !== null) {
+                        const key = `${angle}_${power}`;
+                        const tRad = result.targetAngle * Math.PI / 180;
+                        const cRad = result.cueAngle * Math.PI / 180;
+                        physicsLookupTable[key] = {
+                            tx: Math.round(Math.cos(tRad) * 100000) / 100000,
+                            ty: Math.round(Math.sin(tRad) * 100000) / 100000,
+                            cx: Math.round(Math.cos(cRad) * 100000) / 100000,
+                            cy: Math.round(Math.sin(cRad) * 100000) / 100000
+                        };
+                        validCount++;
+                    }
+                }
+            }
+            
+            statusEl.textContent = `Done! ${validCount} entries. Downloading...`;
+            
+            // Download JSON file
+            const jsonOutput = JSON.stringify(physicsLookupTable);
+            const blob = new Blob([jsonOutput], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'physics-lookup.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            statusEl.textContent = `✅ Downloaded physics-lookup.json with ${validCount} entries!`;
+            resultsEl.innerHTML = `<h3>Lookup Table Complete</h3>
+                <p>${validCount} valid entries out of ${totalTests} tested</p>
+                <p>File downloaded as <b>physics-lookup.json</b></p>
+                <p>Move this file to your project folder.</p>`;
+            
+            return physicsLookupTable;
+        }
+        
+        // Run physics simulation only, return actual angles
+        function runPhysicsOnly(cutAngleDeg, power) {
+            planck.Settings.velocityThreshold = 0;
+            const world = planck.World({ gravity: planck.Vec2(0, 0) });
+            
+            const targetX = 0.3, targetY = 0;
+            const cutAngleRad = cutAngleDeg * Math.PI / 180;
+            const combinedRadius = BALL_RADIUS * 2;
+            const ghostX = targetX - combinedRadius * Math.cos(cutAngleRad);
+            const ghostY = targetY + combinedRadius * Math.sin(cutAngleRad);
+            const cueX = ghostX - 0.3, cueY = ghostY;
+            
+            const targetBall = world.createBody({
+                type: 'dynamic', position: planck.Vec2(targetX, targetY),
+                linearDamping: LINEAR_DAMPING, angularDamping: ANGULAR_DAMPING, bullet: true
+            });
+            targetBall.createFixture({ shape: planck.Circle(BALL_RADIUS), density: 1, friction: BALL_FRICTION, restitution: BALL_RESTITUTION });
+            
+            const cueBall = world.createBody({
+                type: 'dynamic', position: planck.Vec2(cueX, cueY),
+                linearDamping: LINEAR_DAMPING, angularDamping: ANGULAR_DAMPING, bullet: true
+            });
+            cueBall.createFixture({ shape: planck.Circle(BALL_RADIUS), density: 1, friction: BALL_FRICTION, restitution: BALL_RESTITUTION });
+            
+            cueBall.applyLinearImpulse(planck.Vec2(MAX_FORCE * power, 0), cueBall.getPosition());
+            
+            let hasCollided = false;
+            let collisionFrame = -1;
+            world.on('begin-contact', () => { hasCollided = true; });
+            
+            let targetAngle = null, cueAngle = null;
+            
+            for (let i = 0; i < 4000; i++) {
+                world.step(1/480);
+                
+                if (hasCollided && collisionFrame < 0) collisionFrame = i;
+                
+                const cueP = cueBall.getPosition();
+                const targetP = targetBall.getPosition();
+                const dist = Math.sqrt((cueP.x - targetP.x) ** 2 + (cueP.y - targetP.y) ** 2);
+                
+                if (collisionFrame < 0 && dist <= BALL_RADIUS * 2.1) {
+                    collisionFrame = i;
+                    hasCollided = true;
+                }
+                
+                if (collisionFrame >= 0 && i >= collisionFrame + 20 && targetAngle === null) {
+                    const tv = targetBall.getLinearVelocity();
+                    const cv = cueBall.getLinearVelocity();
+                    const ts = Math.sqrt(tv.x ** 2 + tv.y ** 2);
+                    const cs = Math.sqrt(cv.x ** 2 + cv.y ** 2);
+                    
+                    if (ts > 0.0001) targetAngle = Math.atan2(tv.y, tv.x) * 180 / Math.PI;
+                    if (cs > 0.0001) cueAngle = Math.atan2(cv.y, cv.x) * 180 / Math.PI;
+                    break;
+                }
+            }
+            
+            // Fallback
+            if (targetAngle === null && hasCollided) {
+                const tv = targetBall.getLinearVelocity();
+                const cv = cueBall.getLinearVelocity();
+                const ts = Math.sqrt(tv.x ** 2 + tv.y ** 2);
+                const cs = Math.sqrt(cv.x ** 2 + cv.y ** 2);
+                if (ts > 0.0001) targetAngle = Math.atan2(tv.y, tv.x) * 180 / Math.PI;
+                if (cs > 0.0001) cueAngle = Math.atan2(cv.y, cv.x) * 180 / Math.PI;
+            }
+            
+            return { targetAngle, cueAngle };
+        }
+        
+        // Lookup prediction from table
+        // Returns { tx, ty, cx, cy } unit vectors or null
+        function lookupPrediction(cutAngleDeg, power) {
+            // Round to nearest degree (table has every degree from -89 to 89)
+            const roundedAngle = Math.round(cutAngleDeg);
+            
+            // Clamp to valid range
+            if (roundedAngle < -89 || roundedAngle > 89) return null;
+            
+            // Try exact angle with given power first
+            const exactKey = `${roundedAngle}_${power}`;
+            if (physicsLookupTable[exactKey]) {
+                return physicsLookupTable[exactKey];
+            }
+            
+            // Find closest power
+            const powers = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0];
+            let closestPower = powers.reduce((a, b) => Math.abs(b - power) < Math.abs(a - power) ? b : a);
+            
+            const fallbackKey = `${roundedAngle}_${closestPower}`;
+            return physicsLookupTable[fallbackKey] || null;
+        }
+        
+        // ============================================
+        // COMPLETE SELF-CONTAINED TEST
+        // ============================================
+        function runCompleteTest(cutAngleDeg, power = 1.0) {
+            // Create fresh physics world
+            planck.Settings.velocityThreshold = 0;
+            const world = planck.World({ gravity: planck.Vec2(0, 0) });
+            
+            // Target ball at center-right
+            const targetX = 0.3;
+            const targetY = 0;
+            
+            const targetBall = world.createBody({
+                type: 'dynamic',
+                position: planck.Vec2(targetX, targetY),
+                linearDamping: LINEAR_DAMPING,
+                angularDamping: ANGULAR_DAMPING,
+                bullet: true
+            });
+            targetBall.createFixture({
+                shape: planck.Circle(BALL_RADIUS),
+                density: 1.0,
+                friction: BALL_FRICTION,
+                restitution: BALL_RESTITUTION
+            });
+            
+            // Calculate positions based on cut angle
+            const cutAngleRad = cutAngleDeg * Math.PI / 180;
+            const combinedRadius = BALL_RADIUS * 2;
+            
+            // Ghost ball position (where cue touches target)
+            const ghostX = targetX - combinedRadius * Math.cos(cutAngleRad);
+            const ghostY = targetY + combinedRadius * Math.sin(cutAngleRad);
+            
+            // Cue ball starts behind ghost ball
+            const shotDistance = 0.3;
+            const cueX = ghostX - shotDistance;
+            const cueY = ghostY;
+            
+            const cueBall = world.createBody({
+                type: 'dynamic',
+                position: planck.Vec2(cueX, cueY),
+                linearDamping: LINEAR_DAMPING,
+                angularDamping: ANGULAR_DAMPING,
+                bullet: true
+            });
+            cueBall.createFixture({
+                shape: planck.Circle(BALL_RADIUS),
+                density: 1.0,
+                friction: BALL_FRICTION,
+                restitution: BALL_RESTITUTION
+            });
+            
+            // Shot direction: straight right toward ghost/target
+            const shotDirX = 1;
+            const shotDirY = 0;
+            
+            // ========== PREDICTION FROM LOOKUP TABLE ==========
+            // If we have a lookup table, use the actual physics angles
+            // Otherwise fall back to formula-based prediction
+            let predictedTargetDir, predictedCueDir;
+            
+            const lookup = lookupPrediction(cutAngleDeg, power);
+            if (lookup && lookup.tx !== undefined) {
+                // Use exact unit vectors from lookup table
+                predictedTargetDir = { x: lookup.tx, y: lookup.ty };
+                predictedCueDir = { x: lookup.cx, y: lookup.cy };
+            } else {
+                // Fall back to formula-based prediction
+                // Collision normal (from ghost/cue center to target center)
+                const toTargetX = targetX - ghostX;
+                const toTargetY = targetY - ghostY;
+                const toTargetLen = Math.sqrt(toTargetX * toTargetX + toTargetY * toTargetY);
+                const normalX = toTargetX / toTargetLen;
+                const normalY = toTargetY / toTargetLen;
+                
+                const incomingX = shotDirX;
+                const incomingY = shotDirY;
+                const dotNormal = incomingX * normalX + incomingY * normalY;
+                const cutFactor = Math.sqrt(Math.max(0, 1 - dotNormal * dotNormal));
+                const powerFactor = Math.min(1.0, power * 2.0);
+                const throwMagnitude = powerFactor * 0.18 * cutFactor;
+                
+                let targetVx = normalX;
+                let targetVy = normalY;
+                if (throwMagnitude > 0.001) {
+                    targetVx = normalX + throwMagnitude * incomingX;
+                    targetVy = normalY + throwMagnitude * incomingY;
+                    const len = Math.sqrt(targetVx * targetVx + targetVy * targetVy);
+                    targetVx /= len;
+                    targetVy /= len;
+                }
+                predictedTargetDir = { x: targetVx, y: targetVy };
+                
+                let deflectX = incomingX - dotNormal * normalX;
+                let deflectY = incomingY - dotNormal * normalY;
+                let deflectLen = Math.sqrt(deflectX * deflectX + deflectY * deflectY);
+                
+                let cueVx, cueVy;
+                if (deflectLen > 0.001 && cutFactor > 0.1) {
+                    deflectX /= deflectLen;
+                    deflectY /= deflectLen;
+                    let tangentX = -normalY;
+                    let tangentY = normalX;
+                    if (tangentX * deflectX + tangentY * deflectY < 0) {
+                        tangentX = -tangentX;
+                        tangentY = -tangentY;
+                    }
+                    const blendAmount = powerFactor * 0.25 * cutFactor;
+                    cueVx = deflectX * (1 - blendAmount) + tangentX * blendAmount;
+                    cueVy = deflectY * (1 - blendAmount) + tangentY * blendAmount;
+                    const cueLen = Math.sqrt(cueVx * cueVx + cueVy * cueVy);
+                    cueVx /= cueLen;
+                    cueVy /= cueLen;
+                } else if (deflectLen > 0.001) {
+                    cueVx = deflectX / deflectLen;
+                    cueVy = deflectY / deflectLen;
+                } else {
+                    cueVx = incomingX;
+                    cueVy = incomingY;
+                }
+                predictedCueDir = { x: cueVx, y: cueVy };
+            }
+            
+            // Apply impulse with specified power
+            cueBall.applyLinearImpulse(
+                planck.Vec2(shotDirX * MAX_FORCE * power, shotDirY * MAX_FORCE * power),
+                cueBall.getPosition()
+            );
+            
+            // Use contact listener for reliable collision detection
+            let hasCollided = false;
+            let collisionFrame = -1;
+            
+            world.on('begin-contact', function(contact) {
+                hasCollided = true;
+            });
+            
+            // Run physics
+            let actualTargetDir = null;
+            let actualCueDir = null;
+            let actualTargetSpeed = 0;
+            let actualCueSpeed = 0;
+            const cuePath = [];
+            const targetPath = [];
+            
+            // Use more steps and smaller timestep for high-speed accuracy
+            const numSteps = 4000;
+            const timeStep = 1/480;  // Very small timestep
+            
+            let minDist = Infinity;
+            let minDistFrame = 0;
+            
+            for (let i = 0; i < numSteps; i++) {
+                world.step(timeStep);
+                
+                const cueP = cueBall.getPosition();
+                const targetP = targetBall.getPosition();
+                
+                cuePath.push({ x: cueP.x, y: cueP.y });
+                targetPath.push({ x: targetP.x, y: targetP.y });
+                
+                // Track minimum distance as backup collision detection
+                const dist = Math.sqrt((cueP.x - targetP.x) ** 2 + (cueP.y - targetP.y) ** 2);
+                if (dist < minDist) {
+                    minDist = dist;
+                    minDistFrame = i;
+                }
+                
+                // Track when collision happens (via contact listener)
+                if (hasCollided && collisionFrame < 0) {
+                    collisionFrame = i;
+                }
+                
+                // Backup: if contact listener missed it but balls got very close
+                if (collisionFrame < 0 && dist <= BALL_RADIUS * 2.1) {
+                    collisionFrame = i;
+                    hasCollided = true;
+                }
+                
+                // Wait more frames after collision for extreme cuts
+                const waitFrames = 20;
+                
+                if (collisionFrame >= 0 && i >= collisionFrame + waitFrames && !actualTargetDir) {
+                    const targetVel = targetBall.getLinearVelocity();
+                    const cueVel = cueBall.getLinearVelocity();
+                    
+                    const ts = Math.sqrt(targetVel.x ** 2 + targetVel.y ** 2);
+                    const cs = Math.sqrt(cueVel.x ** 2 + cueVel.y ** 2);
+                    
+                    // Lower threshold for detection - even tiny velocities count
+                    if (ts > 0.0001) actualTargetDir = { x: targetVel.x / ts, y: targetVel.y / ts };
+                    if (cs > 0.0001) actualCueDir = { x: cueVel.x / cs, y: cueVel.y / cs };
+                    
+                    // Store actual speeds for analysis
+                    actualTargetSpeed = ts;
+                    actualCueSpeed = cs;
+                    break;
+                }
+            }
+            
+            // Final fallback: if we never detected collision but balls did interact
+            // (target ball moved), capture at end
+            if (!actualTargetDir && minDist < BALL_RADIUS * 2.5) {
+                const targetVel = targetBall.getLinearVelocity();
+                const cueVel = cueBall.getLinearVelocity();
+                
+                const ts = Math.sqrt(targetVel.x ** 2 + targetVel.y ** 2);
+                const cs = Math.sqrt(cueVel.x ** 2 + cueVel.y ** 2);
+                
+                if (ts > 0.0001) actualTargetDir = { x: targetVel.x / ts, y: targetVel.y / ts };
+                if (cs > 0.0001) actualCueDir = { x: cueVel.x / cs, y: cueVel.y / cs };
+                actualTargetSpeed = ts;
+                actualCueSpeed = cs;
+                hasCollided = true;
+            }
+            
+            // Calculate errors
+            let targetError = null;
+            let cueError = null;
+            
+            if (actualTargetDir) {
+                const dot = actualTargetDir.x * predictedTargetDir.x + actualTargetDir.y * predictedTargetDir.y;
+                targetError = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+            }
+            
+            if (actualCueDir) {
+                const dot = actualCueDir.x * predictedCueDir.x + actualCueDir.y * predictedCueDir.y;
+                cueError = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+            }
+            
+            return {
+                cutAngle: cutAngleDeg,
+                power: power,
+                cuePos: { x: cueX, y: cueY },
+                targetPos: { x: targetX, y: targetY },
+                ghostPos: { x: ghostX, y: ghostY },
+                predictedTargetDir,
+                predictedCueDir,
+                actualTargetDir,
+                actualCueDir,
+                actualTargetSpeed,
+                actualCueSpeed,
+                targetError,
+                cueError,
+                hasCollided,
+                cuePath,
+                targetPath
+            };
+        }
+        
+        // ============================================
+        // DRAWING
+        // ============================================
+        function drawResult(result) {
+            ctx.fillStyle = '#0d4d1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Table outline
+            const [tlx, tly] = toScreen(-TABLE_WIDTH/2, TABLE_HEIGHT/2);
+            const [brx, bry] = toScreen(TABLE_WIDTH/2, -TABLE_HEIGHT/2);
+            ctx.strokeStyle = '#4a2810';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(tlx, tly, brx - tlx, bry - tly);
+            
+            // Ball paths
+            if (result.cuePath.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 2;
+                result.cuePath.forEach((p, i) => {
+                    const [sx, sy] = toScreen(p.x, p.y);
+                    if (i === 0) ctx.moveTo(sx, sy);
+                    else ctx.lineTo(sx, sy);
+                });
+                ctx.stroke();
+            }
+            
+            if (result.targetPath.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+                result.targetPath.forEach((p, i) => {
+                    const [sx, sy] = toScreen(p.x, p.y);
+                    if (i === 0) ctx.moveTo(sx, sy);
+                    else ctx.lineTo(sx, sy);
+                });
+                ctx.stroke();
+            }
+            
+            // Shot line
+            const [csx, csy] = toScreen(result.cuePos.x, result.cuePos.y);
+            const [gsx, gsy] = toScreen(result.ghostPos.x, result.ghostPos.y);
+            ctx.beginPath();
+            ctx.moveTo(csx, csy);
+            ctx.lineTo(gsx, gsy);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Ghost ball (dashed)
+            ctx.beginPath();
+            ctx.arc(gsx, gsy, BALL_RADIUS * SCALE, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Target ball
+            const [tsx, tsy] = toScreen(result.targetPos.x, result.targetPos.y);
+            ctx.beginPath();
+            ctx.arc(tsx, tsy, BALL_RADIUS * SCALE, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffcc00';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Cue ball
+            ctx.beginPath();
+            ctx.arc(csx, csy, BALL_RADIUS * SCALE, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.strokeStyle = '#ccc';
+            ctx.stroke();
+            
+            const lineLen = 80;
+            
+            // Predicted target direction (GREEN)
+            if (result.predictedTargetDir) {
+                ctx.beginPath();
+                ctx.moveTo(tsx, tsy);
+                ctx.lineTo(tsx + result.predictedTargetDir.x * lineLen, tsy - result.predictedTargetDir.y * lineLen);
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
+            
+            // Actual target direction (RED)
+            if (result.actualTargetDir) {
+                ctx.beginPath();
+                ctx.moveTo(tsx, tsy);
+                ctx.lineTo(tsx + result.actualTargetDir.x * lineLen * 0.9, tsy - result.actualTargetDir.y * lineLen * 0.9);
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            
+            // Predicted cue deflection (CYAN)
+            if (result.predictedCueDir) {
+                ctx.beginPath();
+                ctx.moveTo(gsx, gsy);
+                ctx.lineTo(gsx + result.predictedCueDir.x * lineLen, gsy - result.predictedCueDir.y * lineLen);
+                ctx.strokeStyle = '#00ffff';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
+            
+            // Actual cue deflection (MAGENTA)
+            if (result.actualCueDir) {
+                ctx.beginPath();
+                ctx.moveTo(gsx, gsy);
+                ctx.lineTo(gsx + result.actualCueDir.x * lineLen * 0.9, gsy - result.actualCueDir.y * lineLen * 0.9);
+                ctx.strokeStyle = '#ff00ff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            
+            // Legend
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            let y = 25;
+            ctx.fillStyle = '#fff';
+            ctx.fillText(`Cut Angle: ${result.cutAngle}°`, 10, y); y += 25;
+            ctx.fillStyle = '#0f0';
+            ctx.fillText('■ Predicted Target Dir', 10, y); y += 20;
+            ctx.fillStyle = '#f00';
+            ctx.fillText('■ Actual Target Dir', 10, y); y += 20;
+            ctx.fillStyle = '#0ff';
+            ctx.fillText('■ Predicted Cue Deflection', 10, y); y += 20;
+            ctx.fillStyle = '#f0f';
+            ctx.fillText('■ Actual Cue Deflection', 10, y); y += 25;
+            
+            ctx.fillStyle = result.targetError !== null && result.targetError < 2 ? '#0f0' : '#ff0';
+            ctx.fillText(`Target Error: ${result.targetError !== null ? result.targetError.toFixed(2) : 'N/A'}°`, 10, y); y += 20;
+            ctx.fillStyle = result.cueError !== null && result.cueError < 5 ? '#0f0' : '#ff0';
+            ctx.fillText(`Cue Error: ${result.cueError !== null ? result.cueError.toFixed(2) : 'N/A'}°`, 10, y);
+            
+            ctx.fillStyle = result.hasCollided ? '#0f0' : '#f00';
+            ctx.fillText(`Collision: ${result.hasCollided ? 'YES' : 'NO'}`, 10, y + 30);
+        }
+        
+        // ============================================
+        // ANIMATION
+        // ============================================
+        let animationId = null;
+        
+        function animateShot() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            const cutAngleDeg = parseFloat(document.getElementById('angleInput').value);
+            statusEl.textContent = `Animating ${cutAngleDeg}° cut shot...`;
+            
+            // Setup
+            planck.Settings.velocityThreshold = 0;
+            const world = planck.World({ gravity: planck.Vec2(0, 0) });
+            
+            const targetX = 0.3, targetY = 0;
+            const cutAngleRad = cutAngleDeg * Math.PI / 180;
+            const combinedRadius = BALL_RADIUS * 2;
+            const ghostX = targetX - combinedRadius * Math.cos(cutAngleRad);
+            const ghostY = targetY + combinedRadius * Math.sin(cutAngleRad);
+            const cueX = ghostX - 0.3, cueY = ghostY;
+            
+            const targetBall = world.createBody({
+                type: 'dynamic', position: planck.Vec2(targetX, targetY),
+                linearDamping: LINEAR_DAMPING, angularDamping: ANGULAR_DAMPING, bullet: true
+            });
+            targetBall.createFixture({ shape: planck.Circle(BALL_RADIUS), density: 1, friction: BALL_FRICTION, restitution: BALL_RESTITUTION });
+            
+            const cueBall = world.createBody({
+                type: 'dynamic', position: planck.Vec2(cueX, cueY),
+                linearDamping: LINEAR_DAMPING, angularDamping: ANGULAR_DAMPING, bullet: true
+            });
+            cueBall.createFixture({ shape: planck.Circle(BALL_RADIUS), density: 1, friction: BALL_FRICTION, restitution: BALL_RESTITUTION });
+            
+            // Predictions
+            const toTargetX = targetX - ghostX, toTargetY = targetY - ghostY;
+            const toTargetLen = Math.sqrt(toTargetX * toTargetX + toTargetY * toTargetY);
+            const predictedTargetDir = { x: toTargetX / toTargetLen, y: toTargetY / toTargetLen };
+            let cueTangentX = -predictedTargetDir.y, cueTangentY = predictedTargetDir.x;
+            if (cueTangentX < 0) { cueTangentX = -cueTangentX; cueTangentY = -cueTangentY; }
+            const predictedCueDir = { x: cueTangentX, y: cueTangentY };
+            
+            cueBall.applyLinearImpulse(planck.Vec2(MAX_FORCE, 0), cueBall.getPosition());
+            
+            const cuePath = [], targetPath = [];
+            let hasCollided = false, actualTargetDir = null, actualCueDir = null;
+            
+            function animate() {
+                world.step(1/60);
+                
+                const cueP = cueBall.getPosition();
+                const targetP = targetBall.getPosition();
+                cuePath.push({ x: cueP.x, y: cueP.y });
+                targetPath.push({ x: targetP.x, y: targetP.y });
+                
+                const dist = Math.sqrt((cueP.x - targetP.x) ** 2 + (cueP.y - targetP.y) ** 2);
+                if (dist <= BALL_RADIUS * 2.1) hasCollided = true;
+                
+                if (hasCollided && dist > BALL_RADIUS * 2.5 && !actualTargetDir) {
+                    const tv = targetBall.getLinearVelocity(), cv = cueBall.getLinearVelocity();
+                    const ts = Math.sqrt(tv.x ** 2 + tv.y ** 2), cs = Math.sqrt(cv.x ** 2 + cv.y ** 2);
+                    if (ts > 0.001) actualTargetDir = { x: tv.x / ts, y: tv.y / ts };
+                    if (cs > 0.001) actualCueDir = { x: cv.x / cs, y: cv.y / cs };
+                }
+                
+                // Draw current state
+                const result = {
+                    cutAngle: cutAngleDeg,
+                    cuePos: { x: cueP.x, y: cueP.y },
+                    targetPos: { x: targetP.x, y: targetP.y },
+                    ghostPos: { x: ghostX, y: ghostY },
+                    predictedTargetDir, predictedCueDir, actualTargetDir, actualCueDir,
+                    targetError: null, cueError: null, hasCollided, cuePath, targetPath
+                };
+                drawResult(result);
+                
+                const cueVel = cueBall.getLinearVelocity(), targetVel = targetBall.getLinearVelocity();
+                const cueSpeed = Math.sqrt(cueVel.x ** 2 + cueVel.y ** 2);
+                const targetSpeed = Math.sqrt(targetVel.x ** 2 + targetVel.y ** 2);
+                
+                if (cueSpeed > 0.01 || targetSpeed > 0.01) {
+                    animationId = requestAnimationFrame(animate);
+                } else {
+                    statusEl.textContent = 'Animation complete!';
+                }
+            }
+            animate();
+        }
+        
+        // ============================================
+        // TEST RUNNERS
+        // ============================================
+        function runSingleTest() {
+            const angle = parseFloat(document.getElementById('angleInput').value);
+            const power = parseFloat(document.getElementById('powerInput').value) || 1.0;
+            statusEl.textContent = `Testing ${angle}° cut, power ${power}...`;
+            
+            const result = runCompleteTest(angle, power);
+            drawResult(result);
+            
+            resultsEl.innerHTML = `
+                <p><strong>Cut Angle:</strong> ${angle}° | <strong>Power:</strong> ${power}</p>
+                <p><strong>Collision:</strong> ${result.hasCollided ? 'YES' : 'NO'}</p>
+                <p><strong>Target Error:</strong> ${result.targetError !== null ? result.targetError.toFixed(2) : 'N/A'}°</p>
+                <p><strong>Cue Error:</strong> ${result.cueError !== null ? result.cueError.toFixed(2) : 'N/A'}°</p>
+            `;
+            statusEl.textContent = 'Test complete!';
+        }
+        
+        function runSpeedTests() {
+            statusEl.textContent = 'Running speed variation tests...';
+            
+            const angles = [-60, -45, -30, -15, 0, 15, 30, 45, 60];
+            const powers = [0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+            
+            let html = '<h3>Speed/Power Variation Tests</h3>';
+            html += '<table style="font-size:11px"><tr><th>Cut°</th>';
+            powers.forEach(p => { html += `<th colspan="2">P=${p}</th>`; });
+            html += '</tr><tr><th></th>';
+            powers.forEach(() => { html += '<th>T</th><th>C</th>'; });
+            html += '</tr>';
+            
+            const allResults = [];
+            
+            for (const angle of angles) {
+                html += `<tr><td>${angle}°</td>`;
+                for (const power of powers) {
+                    const result = runCompleteTest(angle, power);
+                    allResults.push({ angle, power, ...result });
+                    
+                    const tErr = result.targetError !== null ? result.targetError.toFixed(1) : 'N/A';
+                    const cErr = result.cueError !== null ? result.cueError.toFixed(1) : 'N/A';
+                    const tClass = result.targetError !== null && result.targetError < 3 ? 'good' : result.targetError !== null && result.targetError < 8 ? 'warning' : 'bad';
+                    const cClass = result.cueError !== null && result.cueError < 5 ? 'good' : result.cueError !== null && result.cueError < 15 ? 'warning' : 'bad';
+                    
+                    html += `<td class="${tClass}">${tErr}</td><td class="${cClass}">${cErr}</td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</table>';
+            
+            // Analysis by power level
+            html += '<h4>Average Errors by Power Level:</h4><table><tr><th>Power</th><th>Avg Target Err</th><th>Avg Cue Err</th></tr>';
+            for (const power of powers) {
+                const powerResults = allResults.filter(r => r.power === power && r.targetError !== null);
+                const avgT = powerResults.reduce((s, r) => s + r.targetError, 0) / powerResults.length;
+                const avgC = powerResults.reduce((s, r) => s + (r.cueError || 0), 0) / powerResults.length;
+                html += `<tr><td>${power}</td><td>${avgT.toFixed(2)}°</td><td>${avgC.toFixed(2)}°</td></tr>`;
+            }
+            html += '</table>';
+            
+            // Analysis by angle
+            html += '<h4>Average Errors by Cut Angle:</h4><table><tr><th>Angle</th><th>Avg Target Err</th><th>Avg Cue Err</th></tr>';
+            for (const angle of angles) {
+                const angleResults = allResults.filter(r => r.angle === angle && r.targetError !== null);
+                if (angleResults.length > 0) {
+                    const avgT = angleResults.reduce((s, r) => s + r.targetError, 0) / angleResults.length;
+                    const avgC = angleResults.reduce((s, r) => s + (r.cueError || 0), 0) / angleResults.length;
+                    html += `<tr><td>${angle}°</td><td>${avgT.toFixed(2)}°</td><td>${avgC.toFixed(2)}°</td></tr>`;
+                }
+            }
+            html += '</table>';
+            
+            // Raw physics data for one sample
+            html += '<h4>Sample Raw Physics Data (30° cut, various powers):</h4>';
+            html += '<table><tr><th>Power</th><th>Target Speed</th><th>Cue Speed</th><th>Target Angle</th><th>Cue Angle</th><th>Predicted T</th><th>Predicted C</th></tr>';
+            for (const power of powers) {
+                const r = allResults.find(x => x.angle === 30 && x.power === power);
+                if (r && r.actualTargetDir) {
+                    const actualTA = Math.atan2(r.actualTargetDir.y, r.actualTargetDir.x) * 180 / Math.PI;
+                    const actualCA = r.actualCueDir ? Math.atan2(r.actualCueDir.y, r.actualCueDir.x) * 180 / Math.PI : 'N/A';
+                    const predTA = Math.atan2(r.predictedTargetDir.y, r.predictedTargetDir.x) * 180 / Math.PI;
+                    const predCA = Math.atan2(r.predictedCueDir.y, r.predictedCueDir.x) * 180 / Math.PI;
+                    html += `<tr><td>${power}</td><td>${r.actualTargetSpeed.toFixed(3)}</td><td>${r.actualCueSpeed.toFixed(3)}</td>`;
+                    html += `<td>${actualTA.toFixed(1)}°</td><td>${actualCA !== 'N/A' ? actualCA.toFixed(1) + '°' : 'N/A'}</td>`;
+                    html += `<td>${predTA.toFixed(1)}°</td><td>${predCA.toFixed(1)}°</td></tr>`;
+                }
+            }
+            html += '</table>';
+            
+            resultsEl.innerHTML = html;
+            statusEl.textContent = 'Speed tests complete!';
+            
+            // Draw one result
+            drawResult(allResults[Math.floor(allResults.length / 2)]);
+        }
+        
+        function runFullMatrix() {
+            statusEl.textContent = 'Running FULL matrix test (all angles × all speeds)...';
+            
+            // Every 5 degrees from -80 to 80, then every 1 degree for 80-90 range
+            const angles = [];
+            for (let a = -90; a <= -81; a += 1) {
+                angles.push(a);
+            }
+            for (let a = -80; a <= 80; a += 5) {
+                angles.push(a);
+            }
+            for (let a = 81; a <= 90; a += 1) {
+                angles.push(a);
+            }
+            const powers = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0];
+            
+            const allResults = [];
+            let totalTests = angles.length * powers.length;
+            let completed = 0;
+            
+            // Run all tests
+            for (const angle of angles) {
+                for (const power of powers) {
+                    const result = runCompleteTest(angle, power);
+                    allResults.push({ angle, power, ...result });
+                    completed++;
+                }
+            }
+            
+            // Build comprehensive output
+            let html = `<h3>FULL Matrix: ${angles.length} angles × ${powers.length} powers = ${totalTests} tests</h3>`;
+            
+            // Target Error Matrix
+            html += '<h4>Target Ball Direction Errors (degrees):</h4>';
+            html += '<table style="font-size:10px"><tr><th>Angle\\Power</th>';
+            powers.forEach(p => { html += `<th>${p}</th>`; });
+            html += '<th>AVG</th></tr>';
+            
+            for (const angle of angles) {
+                html += `<tr><td><strong>${angle}°</strong></td>`;
+                let rowErrors = [];
+                for (const power of powers) {
+                    const r = allResults.find(x => x.angle === angle && x.power === power);
+                    const err = r && r.targetError !== null ? r.targetError : null;
+                    if (err !== null) rowErrors.push(err);
+                    const cls = err === null ? '' : err < 2 ? 'good' : err < 5 ? 'warning' : 'bad';
+                    html += `<td class="${cls}">${err !== null ? err.toFixed(1) : '-'}</td>`;
+                }
+                const rowAvg = rowErrors.length > 0 ? rowErrors.reduce((a,b) => a+b, 0) / rowErrors.length : null;
+                html += `<td><strong>${rowAvg !== null ? rowAvg.toFixed(1) : '-'}</strong></td></tr>`;
+            }
+            
+            // Column averages
+            html += '<tr><td><strong>AVG</strong></td>';
+            for (const power of powers) {
+                const colResults = allResults.filter(r => r.power === power && r.targetError !== null);
+                const avg = colResults.length > 0 ? colResults.reduce((s, r) => s + r.targetError, 0) / colResults.length : null;
+                html += `<td><strong>${avg !== null ? avg.toFixed(1) : '-'}</strong></td>`;
+            }
+            html += '<td></td></tr></table>';
+            
+            // Cue Error Matrix
+            html += '<h4>Cue Ball Deflection Errors (degrees):</h4>';
+            html += '<table style="font-size:10px"><tr><th>Angle\\Power</th>';
+            powers.forEach(p => { html += `<th>${p}</th>`; });
+            html += '<th>AVG</th></tr>';
+            
+            for (const angle of angles) {
+                html += `<tr><td><strong>${angle}°</strong></td>`;
+                let rowErrors = [];
+                for (const power of powers) {
+                    const r = allResults.find(x => x.angle === angle && x.power === power);
+                    const err = r && r.cueError !== null ? r.cueError : null;
+                    if (err !== null) rowErrors.push(err);
+                    const cls = err === null ? '' : err < 5 ? 'good' : err < 10 ? 'warning' : 'bad';
+                    html += `<td class="${cls}">${err !== null ? err.toFixed(1) : '-'}</td>`;
+                }
+                const rowAvg = rowErrors.length > 0 ? rowErrors.reduce((a,b) => a+b, 0) / rowErrors.length : null;
+                html += `<td><strong>${rowAvg !== null ? rowAvg.toFixed(1) : '-'}</strong></td></tr>`;
+            }
+            
+            // Column averages
+            html += '<tr><td><strong>AVG</strong></td>';
+            for (const power of powers) {
+                const colResults = allResults.filter(r => r.power === power && r.cueError !== null);
+                const avg = colResults.length > 0 ? colResults.reduce((s, r) => s + r.cueError, 0) / colResults.length : null;
+                html += `<td><strong>${avg !== null ? avg.toFixed(1) : '-'}</strong></td>`;
+            }
+            html += '<td></td></tr></table>';
+            
+            // Overall statistics
+            const validTarget = allResults.filter(r => r.targetError !== null);
+            const validCue = allResults.filter(r => r.cueError !== null);
+            
+            html += '<h4>Overall Statistics:</h4>';
+            html += `<p>Valid tests: ${validTarget.length} / ${totalTests}</p>`;
+            html += `<p>Target Error - Avg: ${(validTarget.reduce((s,r) => s + r.targetError, 0) / validTarget.length).toFixed(2)}°, `;
+            html += `Max: ${Math.max(...validTarget.map(r => r.targetError)).toFixed(2)}°, `;
+            html += `Min: ${Math.min(...validTarget.map(r => r.targetError)).toFixed(2)}°</p>`;
+            html += `<p>Cue Error - Avg: ${(validCue.reduce((s,r) => s + r.cueError, 0) / validCue.length).toFixed(2)}°, `;
+            html += `Max: ${Math.max(...validCue.map(r => r.cueError)).toFixed(2)}°, `;
+            html += `Min: ${Math.min(...validCue.map(r => r.cueError)).toFixed(2)}°</p>`;
+            
+            // Find best and worst
+            const bestTarget = validTarget.reduce((best, r) => r.targetError < best.targetError ? r : best);
+            const worstTarget = validTarget.reduce((worst, r) => r.targetError > worst.targetError ? r : worst);
+            html += `<p>Best Target: ${bestTarget.targetError.toFixed(2)}° at ${bestTarget.angle}° cut, power ${bestTarget.power}</p>`;
+            html += `<p>Worst Target: ${worstTarget.targetError.toFixed(2)}° at ${worstTarget.angle}° cut, power ${worstTarget.power}</p>`;
+            
+            // Raw data dump for selected samples
+            html += '<h4>Sample Raw Data (30° cut at various powers):</h4>';
+            html += '<table style="font-size:10px"><tr><th>Power</th><th>T-Speed</th><th>C-Speed</th><th>T-Angle Actual</th><th>T-Angle Pred</th><th>C-Angle Actual</th><th>C-Angle Pred</th></tr>';
+            for (const power of [0.2, 0.5, 1.0, 1.5, 2.0]) {
+                const r = allResults.find(x => x.angle === 30 && x.power === power);
+                if (r && r.actualTargetDir) {
+                    const ta = Math.atan2(r.actualTargetDir.y, r.actualTargetDir.x) * 180 / Math.PI;
+                    const tp = Math.atan2(r.predictedTargetDir.y, r.predictedTargetDir.x) * 180 / Math.PI;
+                    const ca = r.actualCueDir ? Math.atan2(r.actualCueDir.y, r.actualCueDir.x) * 180 / Math.PI : null;
+                    const cp = Math.atan2(r.predictedCueDir.y, r.predictedCueDir.x) * 180 / Math.PI;
+                    html += `<tr><td>${power}</td><td>${r.actualTargetSpeed.toFixed(4)}</td><td>${r.actualCueSpeed.toFixed(4)}</td>`;
+                    html += `<td>${ta.toFixed(2)}°</td><td>${tp.toFixed(2)}°</td>`;
+                    html += `<td>${ca !== null ? ca.toFixed(2) + '°' : '-'}</td><td>${cp.toFixed(2)}°</td></tr>`;
+                }
+            }
+            html += '</table>';
+            
+            resultsEl.innerHTML = html;
+            statusEl.textContent = `Full matrix complete! ${totalTests} tests run.`;
+            
+            drawResult(allResults.find(r => r.angle === 30 && r.power === 1.0));
+        }
+        
+        function runAllTests() {
+            statusEl.textContent = 'Running all angle tests...';
+            
+            const angles = [-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75];
+            const results = [];
+            
+            let html = '<table><tr><th>Cut°</th><th>Target Pred°</th><th>Target Actual°</th><th>T-Err°</th><th>Cue Pred°</th><th>Cue Actual°</th><th>C-Err°</th></tr>';
+            
+            for (const angle of angles) {
+                const result = runCompleteTest(angle);
+                results.push(result);
+                
+                // Calculate actual angles for display
+                const predTargetAngle = result.predictedTargetDir ? 
+                    Math.atan2(result.predictedTargetDir.y, result.predictedTargetDir.x) * 180 / Math.PI : null;
+                const actualTargetAngle = result.actualTargetDir ? 
+                    Math.atan2(result.actualTargetDir.y, result.actualTargetDir.x) * 180 / Math.PI : null;
+                const predCueAngle = result.predictedCueDir ? 
+                    Math.atan2(result.predictedCueDir.y, result.predictedCueDir.x) * 180 / Math.PI : null;
+                const actualCueAngle = result.actualCueDir ? 
+                    Math.atan2(result.actualCueDir.y, result.actualCueDir.x) * 180 / Math.PI : null;
+                
+                const targetClass = result.targetError !== null && result.targetError < 2 ? 'good' : result.targetError !== null && result.targetError < 5 ? 'warning' : 'bad';
+                const cueClass = result.cueError !== null && result.cueError < 5 ? 'good' : result.cueError !== null && result.cueError < 10 ? 'warning' : 'bad';
+                
+                html += `<tr>
+                    <td>${angle}°</td>
+                    <td>${predTargetAngle !== null ? predTargetAngle.toFixed(1) : 'N/A'}</td>
+                    <td>${actualTargetAngle !== null ? actualTargetAngle.toFixed(1) : 'N/A'}</td>
+                    <td class="${targetClass}">${result.targetError !== null ? result.targetError.toFixed(2) : 'N/A'}°</td>
+                    <td>${predCueAngle !== null ? predCueAngle.toFixed(1) : 'N/A'}</td>
+                    <td>${actualCueAngle !== null ? actualCueAngle.toFixed(1) : 'N/A'}</td>
+                    <td class="${cueClass}">${result.cueError !== null ? result.cueError.toFixed(2) : 'N/A'}°</td>
+                </tr>`;
+            }
+            html += '</table>';
+            
+            const validResults = results.filter(r => r.targetError !== null);
+            if (validResults.length > 0) {
+                const avgTarget = validResults.reduce((s, r) => s + r.targetError, 0) / validResults.length;
+                const avgCue = validResults.reduce((s, r) => s + r.cueError, 0) / validResults.length;
+                const maxTarget = Math.max(...validResults.map(r => r.targetError));
+                const maxCue = Math.max(...validResults.map(r => r.cueError));
+                
+                html += `<p><strong>Avg Target Error:</strong> ${avgTarget.toFixed(2)}°</p>`;
+                html += `<p><strong>Avg Cue Error:</strong> ${avgCue.toFixed(2)}°</p>`;
+                html += `<p><strong>Max Target Error:</strong> ${maxTarget.toFixed(2)}°</p>`;
+                html += `<p><strong>Max Cue Error:</strong> ${maxCue.toFixed(2)}°</p>`;
+            }
+            
+            resultsEl.innerHTML = html;
+            statusEl.textContent = 'All tests complete!';
+            
+            // Draw last result
+            if (results.length > 0) {
+                drawResult(results[results.length - 1]);
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('buildLookup').addEventListener('click', buildLookupTable);
+        document.getElementById('runTests').addEventListener('click', runAllTests);
+        document.getElementById('runSpeedTests').addEventListener('click', runSpeedTests);
+        document.getElementById('runFullMatrix').addEventListener('click', runFullMatrix);
+        document.getElementById('runSingle').addEventListener('click', runSingleTest);
+        document.getElementById('animateShot').addEventListener('click', animateShot);
+        
+        // Initial draw
+        const initialResult = runCompleteTest(30);
+        drawResult(initialResult);
+    </script>
+</body>
+</html>

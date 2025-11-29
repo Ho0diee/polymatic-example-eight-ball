@@ -6,6 +6,7 @@ import { CueShot } from "../eight-ball/CueShot";
 import { RoomClient } from "./RoomClient";
 import { StatusOnline } from "./StatusOnline";
 import { type ClientBilliardContext } from "./ClientContext";
+import { ScoreboardUI } from "./ScoreboardUI";
 
 /**
  * Main class for the billiard game client.
@@ -18,5 +19,6 @@ export class MainClient extends Middleware<ClientBilliardContext> {
     this.use(new Terminal());
     this.use(new RoomClient());
     this.use(new StatusOnline());
+    this.use(new ScoreboardUI());
   }
 }
