@@ -7,6 +7,8 @@ import { RoomClient } from "./RoomClient";
 import { StatusOnline } from "./StatusOnline";
 import { type ClientBilliardContext } from "./ClientContext";
 import { ScoreboardUI } from "./ScoreboardUI";
+import { Physics } from "../eight-ball/Physics";
+import { EightBall2P } from "../eight-ball/EightBall2P";
 
 /**
  * Main class for the billiard game client.
@@ -15,6 +17,8 @@ export class MainClient extends Middleware<ClientBilliardContext> {
   constructor() {
     super();
     this.use(new FrameLoop());
+    this.use(new Physics());      // Run physics locally for smooth animation
+    this.use(new EightBall2P());  // Game rules (for ball pocketing, etc.)
     this.use(new CueShot());
     this.use(new Terminal());
     this.use(new RoomClient());

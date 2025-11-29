@@ -9,6 +9,7 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   inactiveRoomTimeout: any;
   lastUpdateTime: number = 0;
   updateInterval: number = 50; // Send updates every 50ms (20 times per second) instead of every frame
+  pendingShot: { x: number; y: number } | null = null;
 
   constructor() {
     super();
@@ -17,6 +18,7 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
     this.on("frame-loop", this.handleFrameLoop);
 
     this.on("update", this.sendFixedObjects);
+    this.on("shot-start", this.handleShotStart);
     this.on("shot-end", this.handleShotEnd);
 
     this.on("user-enter", this.handleUserEnter);
@@ -54,6 +56,8 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
 
       socket.on("cue-shot", (data) => {
         if (this.context.turn.current !== player.turn) return;
+        // Store shot for broadcasting
+        this.pendingShot = data.shot;
         this.emit("cue-shot", data);
 
         this.extendRoomLease();
@@ -94,15 +98,25 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   };
 
   handleFrameLoop() {
-    if (this.context.shotInProgress) {
-      const now = Date.now();
-      // Throttle updates to reduce network traffic
-      if (now - this.lastUpdateTime >= this.updateInterval) {
-        this.lastUpdateTime = now;
-        this.sendMovingObjects();
-      }
-    }
+    // No longer streaming ball positions during shots - clients run physics locally
   }
+
+  handleShotStart = () => {
+    // Broadcast shot to all clients so they can run physics locally
+    if (this.pendingShot) {
+      const ballPositions = this.context.balls?.map(b => ({
+        key: b.key,
+        x: b.position.x,
+        y: b.position.y
+      })) || [];
+      
+      this.context.io.emit("shot-broadcast", {
+        visibleShot: this.pendingShot,
+        ballPositions: ballPositions
+      });
+      this.pendingShot = null;
+    }
+  };
 
   sendMovingObjects = () => {
     const { balls, shotInProgress, gameOver, gameStarted, turn, winner, turnStartTime, players } = this.context;
@@ -155,7 +169,8 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   };
 
   handleShotEnd = () => {
-    // Always send final ball positions when shot ends
+    // Send final authoritative state after shot completes
+    // This syncs any drift between client physics simulations
     this.sendMovingObjects();
   };
 }

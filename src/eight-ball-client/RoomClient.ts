@@ -97,6 +97,7 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
       this.printRoomStatus();
     });
     this.io.on("room-update", this.handleServerRoomState);
+    this.io.on("shot-broadcast", this.handleShotBroadcast);
   };
 
   handleDeactivate = () => {
@@ -107,7 +108,17 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
 
   handleServerRoomState = (data: any) => {
     const wasGameStarted = this.context.gameStarted;
-    Object.assign(this.context, data);
+    
+    // Don't overwrite balls during local physics simulation
+    // Only accept ball updates when shot is NOT in progress (final sync)
+    if (this.context.shotInProgress && data.balls) {
+      // Skip ball updates during shot - we're running physics locally
+      const { balls, ...rest } = data;
+      Object.assign(this.context, rest);
+    } else {
+      Object.assign(this.context, data);
+    }
+    
     if (Array.isArray(data.players) && this.context.auth) {
       this.context.player = data.players.find((p) => p.id === this.context.auth.id);
     }
@@ -128,6 +139,26 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
 
   handleCueShot = (data: object) => {
     this.io?.emit("cue-shot", data);
+  };
+
+  handleShotBroadcast = (data: { visibleShot: { x: number; y: number }; ballPositions: Array<{ key: string; x: number; y: number }> }) => {
+    // Sync ball positions from server before applying shot (ensures all clients start from same state)
+    if (data.ballPositions && this.context.balls) {
+      for (const bp of data.ballPositions) {
+        const ball = this.context.balls.find(b => b.key === bp.key);
+        if (ball) {
+          ball.position.x = bp.x;
+          ball.position.y = bp.y;
+        }
+      }
+    }
+    
+    // Find cue ball and apply shot locally
+    const cueBall = this.context.balls?.find(b => b.color === 'white');
+    if (cueBall && data.visibleShot) {
+      // Emit cue-shot event to trigger local Physics simulation
+      this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
+    }
   };
 
   handleCopyRoomId = () => {
