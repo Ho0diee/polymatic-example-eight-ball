@@ -22,28 +22,34 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 80px;
+  height: 60px;
   background: linear-gradient(to bottom, #1a1a1a 0%, rgba(26,26,26,0.8) 100%);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 10px;
   box-sizing: border-box;
   z-index: 100;
   border-bottom: 1px solid rgba(255,255,255,0.1);
+  /* Never wrap or stack */
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .player-section {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 8px 16px;
+  gap: 8px;
+  padding: 6px 10px;
   background: rgba(0,0,0,0.3);
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.1);
   position: relative;
   transition: all 0.3s ease;
-  min-width: 280px;
+  /* Shrink to fit, no min-width */
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 40vw;
 }
 
 .player-section.active {
@@ -74,8 +80,9 @@ body {
 
 .avatar-container {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
 }
 
 .avatar-img {
@@ -125,8 +132,10 @@ body {
 .player-details {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .player-section.right .player-details {
@@ -147,7 +156,10 @@ body {
 .player-name {
   color: #eee;
   font-weight: bold;
-  font-size: 14px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .player-section.active .player-name {
@@ -158,9 +170,11 @@ body {
 
 .specific-balls {
   display: flex;
-  gap: 4px;
-  height: 20px;
+  gap: 2px;
+  height: 16px;
   align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .mini-ball.empty-slot {
@@ -170,10 +184,10 @@ body {
 }
 
 .mini-ball {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  font-size: 9px;
+  font-size: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -215,18 +229,17 @@ body {
 
 /* Shot Clock */
 .shot-clock {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  /* Static positioning within flex container */
+  position: relative;
+  flex-shrink: 0;
   background: rgba(0,0,0,0.7);
   border: 2px solid #f5a623;
   color: #f5a623;
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   font-weight: bold;
-  font-size: 20px;
+  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -253,8 +266,8 @@ body {
 }
 
 @keyframes pulse-danger {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.1); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
 /* Turn Announcement Overlay */
@@ -316,11 +329,23 @@ body {
 /* --- Power Bar (Left Side) --- */
 #controls-left {
   position: absolute;
-  left: 20px;
+  z-index: 100;
+  /* Default: landscape mode - position on left side */
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  height: 320px;
-  z-index: 100;
+  height: clamp(150px, 35vh, 280px);
+}
+
+/* Portrait mode: move power bar to bottom-left corner */
+@media (orientation: portrait) {
+  #controls-left {
+    left: 10px;
+    top: auto;
+    bottom: 60px;
+    transform: none;
+    height: clamp(120px, 25vh, 200px);
+  }
 }
 
 .power-bar-container {
@@ -372,7 +397,9 @@ body {
   left: 50%;
   transform: translateX(-50%);
   width: 24px;
-  height: 80px;
+  height: 20%; /* Percentage-based for responsive scaling */
+  min-height: 40px;
+  max-height: 80px;
   background: linear-gradient(to right, 
     #9a7a50 0%, 
     #c4a06c 20%, 
@@ -423,7 +450,8 @@ body {
   display: block;
   position: absolute;
   width: 100%;
-  height: 100%;
+  height: calc(100% - 60px); /* Account for top bar */
+  top: 60px; /* Start below top bar */
   touch-action: none;
   background: radial-gradient(circle at center, #2a2a2a 0%, #111 100%); /* Subtle background vignette */
 }
@@ -831,4 +859,478 @@ button:hover {
 #room-code-input:focus {
   outline: none;
   border-color: #f5a623;
+}
+
+/* ===========================================
+   RESPONSIVE DESIGN - All Screen Sizes
+   =========================================== */
+
+/* --- MOBILE PORTRAIT (max-width: 480px, portrait) --- */
+@media (max-width: 480px) and (orientation: portrait) {
+  #top-bar {
+    height: 45px;
+    padding: 0 5px;
+  }
+  
+  .terminal {
+    height: calc(100% - 45px);
+    top: 45px;
+  }
+  
+  .player-section {
+    gap: 4px;
+    padding: 3px 5px;
+    border-radius: 6px;
+  }
+  
+  .avatar-container {
+    width: 22px;
+    height: 22px;
+  }
+  
+  .player-name {
+    font-size: 10px;
+  }
+  
+  .specific-balls {
+    display: flex;
+    gap: 1px;
+    height: 12px;
+  }
+  
+  .mini-ball {
+    width: 10px;
+    height: 10px;
+    font-size: 6px;
+  }
+  
+  .shot-clock {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+  }
+  
+  .power-track {
+    width: 24px;
+  }
+  
+  #controls-left {
+    height: 120px;
+  }
+}
+
+/* --- MOBILE LANDSCAPE (max-width: 850px, landscape) --- */
+@media (max-width: 850px) and (orientation: landscape) {
+  #top-bar {
+    height: 40px;
+    padding: 0 8px;
+  }
+  
+  .terminal {
+    height: calc(100% - 40px);
+    top: 40px;
+  }
+  
+  .player-section {
+    gap: 5px;
+    padding: 3px 6px;
+    border-radius: 6px;
+  }
+  
+  .avatar-container {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .player-name {
+    font-size: 10px;
+  }
+  
+  .specific-balls {
+    display: flex;
+    gap: 1px;
+    height: 10px;
+  }
+  
+  .mini-ball {
+    width: 8px;
+    height: 8px;
+    font-size: 5px;
+  }
+  
+  .shot-clock {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  .power-track {
+    width: 26px;
+  }
+  
+  #controls-left {
+    height: 100px;
+  }
+}
+
+/* --- TABLET PORTRAIT (481px - 768px, portrait) --- */
+@media (min-width: 481px) and (max-width: 768px) and (orientation: portrait) {
+  #top-bar {
+    height: 55px;
+    padding: 0 10px;
+  }
+  
+  .terminal {
+    height: calc(100% - 55px);
+    top: 55px;
+  }
+  
+  .player-section {
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 8px;
+  }
+  
+  .avatar-container {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .player-name {
+    font-size: 12px;
+  }
+  
+  .specific-balls {
+    display: flex;
+    gap: 2px;
+    height: 18px;
+  }
+  
+  .mini-ball {
+    width: 14px;
+    height: 14px;
+    font-size: 8px;
+  }
+  
+  .shot-clock {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+  
+  .power-track {
+    width: 30px;
+  }
+  
+  #controls-left {
+    height: 180px;
+  }
+}
+
+/* --- TABLET LANDSCAPE (769px - 1024px, landscape) --- */
+@media (min-width: 769px) and (max-width: 1024px) and (orientation: landscape) {
+  #top-bar {
+    height: 50px;
+    padding: 0 10px;
+  }
+  
+  .terminal {
+    height: calc(100% - 50px);
+    top: 50px;
+  }
+  
+  .player-section {
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 8px;
+  }
+  
+  .avatar-container {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .player-name {
+    font-size: 11px;
+  }
+  
+  .specific-balls {
+    display: flex;
+    gap: 2px;
+    height: 16px;
+  }
+  
+  .mini-ball {
+    width: 12px;
+    height: 12px;
+    font-size: 7px;
+  }
+  
+  .shot-clock {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+  
+  .power-track {
+    width: 28px;
+  }
+  
+  #controls-left {
+    height: 160px;
+  }
+}
+
+/* --- SMALL DESKTOP (851px - 1199px, any orientation) --- */
+@media (min-width: 851px) and (max-width: 1199px) {
+  #top-bar {
+    height: 60px;
+    padding: 0 10px;
+  }
+  
+  .terminal {
+    height: calc(100% - 60px);
+    top: 60px;
+  }
+  
+  .player-section {
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+  }
+  
+  .avatar-container {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .player-name {
+    font-size: 12px;
+  }
+  
+  .specific-balls {
+    display: flex;
+    gap: 2px;
+    height: 18px;
+  }
+  
+  .mini-ball {
+    width: 14px;
+    height: 14px;
+    font-size: 8px;
+  }
+  
+  .shot-clock {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+  
+  .power-track {
+    width: 32px;
+  }
+  
+  #controls-left {
+    height: 200px;
+  }
+}
+
+/* --- DESKTOP (1200px - 1599px) --- */
+@media (min-width: 1200px) and (max-width: 1599px) {
+  #top-bar {
+    height: 70px;
+    padding: 0 18px;
+  }
+  
+  .terminal {
+    height: calc(100% - 70px);
+    top: 70px;
+  }
+  
+  .player-section {
+    gap: 10px;
+    padding: 8px 14px;
+    border-radius: 10px;
+  }
+  
+  .avatar-container {
+    width: 44px;
+    height: 44px;
+  }
+  
+  .player-name {
+    font-size: 14px;
+  }
+  
+  .specific-balls {
+    display: flex;
+    gap: 3px;
+    height: 22px;
+  }
+  
+  .mini-ball {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+  
+  .shot-clock {
+    width: 46px;
+    height: 46px;
+    font-size: 18px;
+  }
+  
+  .power-track {
+    width: 36px;
+  }
+  
+  #controls-left {
+    height: 240px;
+    left: max(15px, calc(12vw - 60px));
+  }
+}
+
+/* --- LARGE DESKTOP (1600px - 1919px) --- */
+@media (min-width: 1600px) and (max-width: 1919px) {
+  #top-bar {
+    height: 80px;
+    padding: 0 25px;
+  }
+  
+  .terminal {
+    height: calc(100% - 80px);
+    top: 80px;
+  }
+  
+  .player-section {
+    gap: 12px;
+    padding: 10px 18px;
+    border-radius: 12px;
+  }
+  
+  .avatar-container {
+    width: 52px;
+    height: 52px;
+  }
+  
+  .player-name {
+    font-size: 16px;
+  }
+  
+  .specific-balls {
+    display: flex;
+    gap: 4px;
+    height: 26px;
+  }
+  
+  .mini-ball {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+  }
+  
+  .shot-clock {
+    width: 52px;
+    height: 52px;
+    font-size: 20px;
+  }
+  
+  .power-track {
+    width: 38px;
+  }
+  
+  #controls-left {
+    height: 270px;
+    left: max(20px, calc(14vw - 70px));
+  }
+}
+
+/* --- EXTRA LARGE (1920px+) --- */
+@media (min-width: 1920px) {
+  #top-bar {
+    height: 90px;
+    padding: 0 30px;
+  }
+  
+  .terminal {
+    height: calc(100% - 90px);
+    top: 90px;
+  }
+  
+  .player-section {
+    gap: 14px;
+    padding: 12px 22px;
+    border-radius: 14px;
+  }
+  
+  .avatar-container {
+    width: 58px;
+    height: 58px;
+  }
+  
+  .player-name {
+    font-size: 18px;
+  }
+  
+  .specific-balls {
+    display: flex;
+    gap: 5px;
+    height: 30px;
+  }
+  
+  .mini-ball {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+  }
+  
+  .shot-clock {
+    width: 58px;
+    height: 58px;
+    font-size: 22px;
+  }
+  
+  .power-track {
+    width: 42px;
+  }
+  
+  #controls-left {
+    height: 300px;
+    left: max(25px, calc(16vw - 80px));
+  }
+}
+
+/* --- Very short screens override --- */
+@media (max-height: 450px) {
+  #top-bar {
+    height: 38px !important;
+  }
+  
+  .terminal {
+    height: calc(100% - 38px) !important;
+    top: 38px !important;
+  }
+  
+  .avatar-container {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  
+  .specific-balls {
+    display: flex !important;
+    gap: 1px !important;
+    height: 10px !important;
+  }
+  
+  .mini-ball {
+    width: 8px !important;
+    height: 8px !important;
+    font-size: 5px !important;
+  }
+  
+  .shot-clock {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 11px !important;
+  }
 }

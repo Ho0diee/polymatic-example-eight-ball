@@ -1125,15 +1125,30 @@ export class Terminal extends Middleware<ClientBilliardContext> {
     const table = this.context?.table;
     if (!this.container || !table) return;
     if (this.tableConfigMemo.update(table.width, table.height, window.innerWidth, window.innerHeight)) {
-      const width = table.width * 1.3;
-      const height = table.height * 1.3;
+      // Use more padding on larger screens to keep table away from edges
+      const minDimension = Math.min(window.innerWidth, window.innerHeight);
+      let paddingMultiplier = 1.3; // Default padding
+      let horizontalOffset = 0; // Offset to shift table right (making room for power bar)
+      
+      if (minDimension >= 1200) {
+        paddingMultiplier = 1.6; // More padding on large screens
+        horizontalOffset = table.width * 0.08; // Shift table right by 8% of table width
+      } else if (minDimension >= 900) {
+        paddingMultiplier = 1.45; // Medium padding
+        horizontalOffset = table.width * 0.05; // Shift table right by 5%
+      }
+      
+      const width = table.width * paddingMultiplier;
+      const height = table.height * paddingMultiplier;
       const isPortrait = window.innerWidth < window.innerHeight;
       if (isPortrait) {
         this.container.classList.add("portrait");
         this.container.parentElement?.setAttribute("viewBox", `-${height * 0.5} -${width * 0.5} ${height} ${width}`);
       } else {
         this.container.classList.remove("portrait");
-        this.container.parentElement?.setAttribute("viewBox", `-${width * 0.5} -${height * 0.5} ${width} ${height}`);
+        // Apply horizontal offset to shift viewBox left (which shifts table right on screen)
+        const viewX = -width * 0.5 - horizontalOffset;
+        this.container.parentElement?.setAttribute("viewBox", `${viewX} -${height * 0.5} ${width} ${height}`);
       }
     }
   };

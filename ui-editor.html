@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eight Ball UI Editor</title>
+  <style>
+    * { box-sizing: border-box; }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1a1a1a;
+      color: #eee;
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    h1 { text-align: center; color: #f5a623; margin-bottom: 5px; }
+    .subtitle { text-align: center; color: #888; margin-bottom: 20px; }
+    
+    .main-container {
+      display: flex;
+      gap: 20px;
+      max-width: 2000px;
+      margin: 0 auto;
+    }
+    
+    .controls-panel {
+      width: 320px;
+      flex-shrink: 0;
+      background: #2a2a2a;
+      border-radius: 12px;
+      padding: 15px;
+      height: fit-content;
+      position: sticky;
+      top: 20px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    
+    .preview-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-x: auto;
+    }
+    
+    .all-previews {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    
+    .breakpoint-selector {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    
+    .bp-btn {
+      padding: 8px 12px;
+      background: #333;
+      border: 2px solid #444;
+      border-radius: 6px;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s;
+    }
+    
+    .bp-btn:hover { border-color: #666; }
+    .bp-btn.active { background: #f5a623; border-color: #f5a623; color: #000; font-weight: bold; }
+    
+    .orientation-toggle {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+    
+    .orientation-toggle label { color: #888; font-size: 13px; }
+    
+    .orient-btn {
+      padding: 6px 12px;
+      background: #333;
+      border: 2px solid #444;
+      border-radius: 6px;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .orient-btn.active { background: #4a90d9; border-color: #4a90d9; color: #fff; }
+    
+    .control-group { margin-bottom: 15px; }
+    .control-group h3 {
+      color: #f5a623;
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .control-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    
+    .control-row label { width: 100px; font-size: 11px; color: #aaa; }
+    .control-row input[type="range"] { flex: 1; margin-right: 8px; }
+    .control-row .value { width: 45px; text-align: right; font-family: monospace; color: #f5a623; font-size: 11px; }
+    
+    /* Preview cards */
+    .preview-card {
+      background: #2a2a2a;
+      border-radius: 10px;
+      padding: 10px;
+      display: inline-block;
+    }
+    
+    .preview-card.editing { border: 2px solid #f5a623; }
+    .preview-card:not(.editing) { border: 2px solid transparent; opacity: 0.7; }
+    
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 0 5px;
+    }
+    
+    .preview-title { color: #f5a623; font-weight: bold; font-size: 13px; }
+    .preview-dims { color: #888; font-size: 11px; }
+    
+    .preview-container {
+      background: #6a6e73;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .preview-frame { position: relative; overflow: hidden; }
+    
+    /* Mock UI elements */
+    .mock-top-bar {
+      position: absolute;
+      top: 0; left: 0; width: 100%;
+      background: linear-gradient(to bottom, #1a1a1a 0%, rgba(26,26,26,0.9) 100%);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .mock-player-section {
+      display: flex;
+      align-items: center;
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+      border: 2px solid #f5a623;
+    }
+    
+    .mock-avatar {
+      background-color: #3a3a3a;
+      border-radius: 4px;
+      border: 2px solid #f5a623;
+      flex-shrink: 0;
+    }
+    
+    .mock-player-details { display: flex; flex-direction: column; }
+    .mock-player-name { color: #f5a623; font-weight: bold; white-space: nowrap; }
+    .mock-balls { display: flex; }
+    .mock-mini-ball {
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      border: 1px dashed rgba(255,255,255,0.3);
+    }
+    
+    .mock-shot-clock {
+      background: rgba(0,0,0,0.7);
+      border: 2px solid #f5a623;
+      color: #f5a623;
+      border-radius: 50%;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    
+    .mock-table-area {
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      background: #0d5a2d;
+      border: 6px solid #5a3d1a;
+      border-radius: 6px;
+    }
+    
+    .mock-power-bar {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 100;
+    }
+    
+    .mock-power-track {
+      background: linear-gradient(to bottom, #d4c84a, #a04020);
+      border-radius: 3px;
+      border: 2px solid #2a1a10;
+    }
+    
+    /* Buttons */
+    .btn-group { display: flex; gap: 8px; margin-top: 15px; }
+    .btn {
+      flex: 1;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-success { background: #28a745; color: #fff; }
+    .btn-success:hover { background: #34ce57; }
+    .btn-secondary { background: #444; color: #eee; }
+    .btn-secondary:hover { background: #555; }
+    .btn-primary { background: #4a90d9; color: #fff; }
+    .btn-primary:hover { background: #5aa0e9; }
+    
+    .json-output {
+      margin-top: 15px;
+      background: #1a1a1a;
+      border-radius: 6px;
+      padding: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .json-output pre { margin: 0; font-size: 9px; color: #8f8; white-space: pre-wrap; }
+    
+    .css-output {
+      margin-top: 10px;
+      background: #1a1a1a;
+      border-radius: 6px;
+      padding: 10px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    
+    .css-output pre { margin: 0; font-size: 9px; color: #f8f; white-space: pre-wrap; }
+    
+    input[type="file"] { display: none; }
+    
+    .view-toggle {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎱 Eight Ball UI Editor</h1>
+  <p class="subtitle">Design UI for all screen sizes - exports CSS-ready values</p>
+  
+  <div class="main-container">
+    <div class="controls-panel">
+      <div class="breakpoint-selector" id="breakpointSelector"></div>
+      
+      <div class="orientation-toggle">
+        <label>Orientation:</label>
+        <button class="orient-btn active" data-orient="landscape">🖥 Landscape</button>
+        <button class="orient-btn" data-orient="portrait">📱 Portrait</button>
+      </div>
+      
+      <div class="control-group">
+        <h3>Top Bar</h3>
+        <div class="control-row">
+          <label>Height</label>
+          <input type="range" id="topBarHeight" min="35" max="100" value="60">
+          <span class="value" id="topBarHeightVal">60px</span>
+        </div>
+        <div class="control-row">
+          <label>Padding</label>
+          <input type="range" id="topBarPadding" min="3" max="40" value="10">
+          <span class="value" id="topBarPaddingVal">10px</span>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <h3>Player Section</h3>
+        <div class="control-row">
+          <label>Padding H</label>
+          <input type="range" id="playerPaddingH" min="3" max="24" value="10">
+          <span class="value" id="playerPaddingHVal">10px</span>
+        </div>
+        <div class="control-row">
+          <label>Padding V</label>
+          <input type="range" id="playerPaddingV" min="2" max="16" value="6">
+          <span class="value" id="playerPaddingVVal">6px</span>
+        </div>
+        <div class="control-row">
+          <label>Gap</label>
+          <input type="range" id="playerGap" min="2" max="20" value="8">
+          <span class="value" id="playerGapVal">8px</span>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <h3>Avatar</h3>
+        <div class="control-row">
+          <label>Size</label>
+          <input type="range" id="avatarSize" min="16" max="64" value="36">
+          <span class="value" id="avatarSizeVal">36px</span>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <h3>Player Name</h3>
+        <div class="control-row">
+          <label>Font Size</label>
+          <input type="range" id="playerNameSize" min="9" max="22" value="12">
+          <span class="value" id="playerNameSizeVal">12px</span>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <h3>Mini Balls</h3>
+        <div class="control-row">
+          <label>Size</label>
+          <input type="range" id="miniBallSize" min="8" max="28" value="14">
+          <span class="value" id="miniBallSizeVal">14px</span>
+        </div>
+        <div class="control-row">
+          <label>Gap</label>
+          <input type="range" id="miniBallGap" min="1" max="8" value="2">
+          <span class="value" id="miniBallGapVal">2px</span>
+        </div>
+        <div class="control-row">
+          <label>Visible</label>
+          <input type="checkbox" id="miniBallVisible" checked>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <h3>Shot Clock</h3>
+        <div class="control-row">
+          <label>Size</label>
+          <input type="range" id="shotClockSize" min="20" max="64" value="40">
+          <span class="value" id="shotClockSizeVal">40px</span>
+        </div>
+        <div class="control-row">
+          <label>Font Size</label>
+          <input type="range" id="shotClockFont" min="8" max="26" value="16">
+          <span class="value" id="shotClockFontVal">16px</span>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <h3>Power Bar</h3>
+        <div class="control-row">
+          <label>Width</label>
+          <input type="range" id="powerBarWidth" min="18" max="50" value="32">
+          <span class="value" id="powerBarWidthVal">32px</span>
+        </div>
+        <div class="control-row">
+          <label>Height</label>
+          <input type="range" id="powerBarHeight" min="80" max="350" value="200">
+          <span class="value" id="powerBarHeightVal">200px</span>
+        </div>
+      </div>
+      
+      <div class="btn-group">
+        <button class="btn btn-success" id="downloadBtn">📥 JSON</button>
+        <button class="btn btn-primary" id="downloadCssBtn">📥 CSS</button>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-secondary" id="loadBtn">📂 Load</button>
+        <button class="btn btn-secondary" id="resetBtn">🔄 Reset</button>
+      </div>
+      <input type="file" id="fileInput" accept=".json">
+      
+      <div class="css-output">
+        <strong style="color:#f5a623;font-size:10px;">CSS Preview:</strong>
+        <pre id="cssPreview"></pre>
+      </div>
+    </div>
+    
+    <div class="preview-panel">
+      <div class="view-toggle">
+        <button class="btn btn-secondary active" id="showAllBtn">Show All Previews</button>
+        <button class="btn btn-secondary" id="showCurrentBtn">Show Current Only</button>
+      </div>
+      <div class="all-previews" id="allPreviews"></div>
+    </div>
+  </div>
+  
+  <script>
+    // Breakpoint definitions with BOTH orientations
+    const breakpoints = {
+      'mobile-portrait': { width: 375, height: 667, label: 'Mobile Portrait', css: 'max-width: 480px, portrait' },
+      'mobile-landscape': { width: 667, height: 375, label: 'Mobile Landscape', css: 'max-width: 480px, landscape' },
+      'tablet-portrait': { width: 768, height: 1024, label: 'Tablet Portrait', css: 'max-width: 768px, portrait' },
+      'tablet-landscape': { width: 1024, height: 768, label: 'Tablet Landscape', css: 'max-width: 768px, landscape' },
+      'desktop': { width: 1280, height: 720, label: 'Desktop', css: 'max-width: 1200px' },
+      'large': { width: 1600, height: 900, label: 'Large', css: 'max-width: 1600px' },
+      'xlarge': { width: 1920, height: 1080, label: 'XLarge', css: 'min-width: 1601px' }
+    };
+    
+    // Default settings for each breakpoint
+    const defaultSettings = {
+      'mobile-portrait': {
+        topBarHeight: 45, topBarPadding: 5,
+        playerPaddingH: 5, playerPaddingV: 3, playerGap: 4,
+        avatarSize: 22, playerNameSize: 10,
+        miniBallSize: 12, miniBallGap: 1, miniBallVisible: false,
+        shotClockSize: 26, shotClockFont: 11,
+        powerBarWidth: 24, powerBarHeight: 120
+      },
+      'mobile-landscape': {
+        topBarHeight: 40, topBarPadding: 8,
+        playerPaddingH: 6, playerPaddingV: 3, playerGap: 5,
+        avatarSize: 24, playerNameSize: 10,
+        miniBallSize: 10, miniBallGap: 1, miniBallVisible: false,
+        shotClockSize: 28, shotClockFont: 12,
+        powerBarWidth: 26, powerBarHeight: 100
+      },
+      'tablet-portrait': {
+        topBarHeight: 55, topBarPadding: 10,
+        playerPaddingH: 8, playerPaddingV: 5, playerGap: 6,
+        avatarSize: 32, playerNameSize: 12,
+        miniBallSize: 14, miniBallGap: 2, miniBallVisible: true,
+        shotClockSize: 36, shotClockFont: 14,
+        powerBarWidth: 30, powerBarHeight: 180
+      },
+      'tablet-landscape': {
+        topBarHeight: 50, topBarPadding: 10,
+        playerPaddingH: 8, playerPaddingV: 4, playerGap: 6,
+        avatarSize: 30, playerNameSize: 11,
+        miniBallSize: 12, miniBallGap: 2, miniBallVisible: true,
+        shotClockSize: 34, shotClockFont: 14,
+        powerBarWidth: 28, powerBarHeight: 160
+      },
+      'desktop': {
+        topBarHeight: 60, topBarPadding: 10,
+        playerPaddingH: 10, playerPaddingV: 6, playerGap: 8,
+        avatarSize: 36, playerNameSize: 12,
+        miniBallSize: 14, miniBallGap: 2, miniBallVisible: true,
+        shotClockSize: 40, shotClockFont: 16,
+        powerBarWidth: 32, powerBarHeight: 200
+      },
+      'large': {
+        topBarHeight: 75, topBarPadding: 18,
+        playerPaddingH: 14, playerPaddingV: 8, playerGap: 10,
+        avatarSize: 44, playerNameSize: 15,
+        miniBallSize: 18, miniBallGap: 3, miniBallVisible: true,
+        shotClockSize: 48, shotClockFont: 18,
+        powerBarWidth: 36, powerBarHeight: 240
+      },
+      'xlarge': {
+        topBarHeight: 85, topBarPadding: 25,
+        playerPaddingH: 18, playerPaddingV: 10, playerGap: 12,
+        avatarSize: 52, playerNameSize: 17,
+        miniBallSize: 22, miniBallGap: 4, miniBallVisible: true,
+        shotClockSize: 54, shotClockFont: 20,
+        powerBarWidth: 40, powerBarHeight: 270
+      }
+    };
+    
+    let settings = JSON.parse(JSON.stringify(defaultSettings));
+    let currentBreakpoint = 'desktop';
+    let showAll = true;
+    
+    // Control elements
+    const controlIds = [
+      'topBarHeight', 'topBarPadding', 'playerPaddingH', 'playerPaddingV', 'playerGap',
+      'avatarSize', 'playerNameSize', 'miniBallSize', 'miniBallGap', 'miniBallVisible',
+      'shotClockSize', 'shotClockFont', 'powerBarWidth', 'powerBarHeight'
+    ];
+    
+    // Initialize breakpoint buttons
+    function initBreakpointButtons() {
+      const container = document.getElementById('breakpointSelector');
+      container.innerHTML = '';
+      for (const key in breakpoints) {
+        const btn = document.createElement('button');
+        btn.className = 'bp-btn' + (key === currentBreakpoint ? ' active' : '');
+        btn.dataset.bp = key;
+        btn.innerHTML = breakpoints[key].label.replace(' ', '<br><small style="font-size:9px">') + '</small>';
+        btn.onclick = () => selectBreakpoint(key);
+        container.appendChild(btn);
+      }
+    }
+    
+    function selectBreakpoint(bp) {
+      currentBreakpoint = bp;
+      document.querySelectorAll('.bp-btn').forEach(b => b.classList.toggle('active', b.dataset.bp === bp));
+      
+      // Update orientation buttons
+      const isPortrait = bp.includes('portrait');
+      document.querySelectorAll('.orient-btn').forEach(b => {
+        b.classList.toggle('active', 
+          (b.dataset.orient === 'portrait' && isPortrait) ||
+          (b.dataset.orient === 'landscape' && !isPortrait)
+        );
+      });
+      
+      loadSettingsToControls();
+      updateAllPreviews();
+    }
+    
+    // Orientation toggle
+    document.querySelectorAll('.orient-btn').forEach(btn => {
+      btn.onclick = () => {
+        const orient = btn.dataset.orient;
+        // Find equivalent breakpoint with different orientation
+        let newBp = currentBreakpoint;
+        if (orient === 'portrait' && currentBreakpoint.includes('landscape')) {
+          newBp = currentBreakpoint.replace('landscape', 'portrait');
+        } else if (orient === 'landscape' && currentBreakpoint.includes('portrait')) {
+          newBp = currentBreakpoint.replace('portrait', 'landscape');
+        }
+        if (breakpoints[newBp]) {
+          selectBreakpoint(newBp);
+        }
+      };
+    });
+    
+    function loadSettingsToControls() {
+      const s = settings[currentBreakpoint];
+      controlIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (id === 'miniBallVisible') {
+          el.checked = s[id];
+        } else {
+          el.value = s[id];
+          const valEl = document.getElementById(id + 'Val');
+          if (valEl) valEl.textContent = s[id] + 'px';
+        }
+      });
+    }
+    
+    function saveControlsToSettings() {
+      const s = settings[currentBreakpoint];
+      controlIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (id === 'miniBallVisible') {
+          s[id] = el.checked;
+        } else {
+          s[id] = parseInt(el.value);
+        }
+      });
+    }
+    
+    // Create preview HTML for a breakpoint
+    function createPreviewHTML(bp) {
+      const info = breakpoints[bp];
+      const scale = Math.min(0.35, 300 / info.width);
+      const w = Math.round(info.width * scale);
+      const h = Math.round(info.height * scale);
+      
+      return `
+        <div class="preview-card ${bp === currentBreakpoint ? 'editing' : ''}" data-bp="${bp}" onclick="selectBreakpoint('${bp}')">
+          <div class="preview-header">
+            <span class="preview-title">${info.label}</span>
+            <span class="preview-dims">${info.width}×${info.height}</span>
+          </div>
+          <div class="preview-container">
+            <div class="preview-frame" style="width:${w}px;height:${h}px;" data-scale="${scale}">
+              <div class="mock-top-bar"></div>
+              <div class="mock-table-area"></div>
+              <div class="mock-power-bar"><div class="mock-power-track"></div></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    function initPreviews() {
+      const container = document.getElementById('allPreviews');
+      container.innerHTML = '';
+      for (const bp in breakpoints) {
+        container.innerHTML += createPreviewHTML(bp);
+      }
+      updateAllPreviews();
+    }
+    
+    function updateAllPreviews() {
+      for (const bp in breakpoints) {
+        updatePreview(bp);
+      }
+      updateCssPreview();
+      
+      // Update card highlighting
+      document.querySelectorAll('.preview-card').forEach(card => {
+        const isEditing = card.dataset.bp === currentBreakpoint;
+        card.classList.toggle('editing', isEditing);
+        card.style.display = (showAll || isEditing) ? 'inline-block' : 'none';
+      });
+    }
+    
+    function updatePreview(bp) {
+      const card = document.querySelector(`.preview-card[data-bp="${bp}"]`);
+      if (!card) return;
+      
+      const frame = card.querySelector('.preview-frame');
+      const scale = parseFloat(frame.dataset.scale);
+      const s = settings[bp];
+      
+      // Top bar
+      const topBar = frame.querySelector('.mock-top-bar');
+      topBar.style.height = (s.topBarHeight * scale) + 'px';
+      topBar.style.padding = `0 ${s.topBarPadding * scale}px`;
+      topBar.innerHTML = `
+        <div class="mock-player-section" style="padding:${s.playerPaddingV*scale}px ${s.playerPaddingH*scale}px;gap:${s.playerGap*scale}px;">
+          <div class="mock-avatar" style="width:${s.avatarSize*scale}px;height:${s.avatarSize*scale}px;"></div>
+          <div class="mock-player-details">
+            <span class="mock-player-name" style="font-size:${s.playerNameSize*scale}px;">P1</span>
+            <div class="mock-balls" style="gap:${s.miniBallGap*scale}px;display:${s.miniBallVisible?'flex':'none'};">
+              ${[1,2,3,4,5].map(() => `<div class="mock-mini-ball" style="width:${s.miniBallSize*scale}px;height:${s.miniBallSize*scale}px;"></div>`).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="mock-shot-clock" style="width:${s.shotClockSize*scale}px;height:${s.shotClockSize*scale}px;font-size:${s.shotClockFont*scale}px;">54</div>
+        <div class="mock-player-section" style="padding:${s.playerPaddingV*scale}px ${s.playerPaddingH*scale}px;gap:${s.playerGap*scale}px;">
+          <div class="mock-player-details">
+            <span class="mock-player-name" style="font-size:${s.playerNameSize*scale}px;">P2</span>
+            <div class="mock-balls" style="gap:${s.miniBallGap*scale}px;display:${s.miniBallVisible?'flex':'none'};">
+              ${[1,2,3,4,5].map(() => `<div class="mock-mini-ball" style="width:${s.miniBallSize*scale}px;height:${s.miniBallSize*scale}px;"></div>`).join('')}
+            </div>
+          </div>
+          <div class="mock-avatar" style="width:${s.avatarSize*scale}px;height:${s.avatarSize*scale}px;"></div>
+        </div>
+      `;
+      
+      // Table
+      const table = frame.querySelector('.mock-table-area');
+      const tableTop = s.topBarHeight * scale;
+      table.style.width = '65%';
+      table.style.height = `calc(85% - ${tableTop}px)`;
+      table.style.top = `calc(50% + ${tableTop * 0.4}px)`;
+      
+      // Power bar
+      const powerTrack = frame.querySelector('.mock-power-track');
+      powerTrack.style.width = (s.powerBarWidth * scale) + 'px';
+      powerTrack.style.height = (s.powerBarHeight * scale) + 'px';
+    }
+    
+    function updateCssPreview() {
+      // Generate CSS media query snippet
+      let css = '/* Generated CSS */\n\n';
+      
+      // Group by similar breakpoints
+      const groups = {
+        'Mobile Portrait': ['mobile-portrait'],
+        'Mobile Landscape': ['mobile-landscape'],
+        'Tablet Portrait': ['tablet-portrait'],
+        'Tablet Landscape': ['tablet-landscape'],
+        'Desktop': ['desktop'],
+        'Large': ['large'],
+        'XLarge': ['xlarge']
+      };
+      
+      for (const [name, bps] of Object.entries(groups)) {
+        const bp = bps[0];
+        const s = settings[bp];
+        const info = breakpoints[bp];
+        css += `/* ${name} (${info.css}) */\n`;
+        css += `#top-bar { height: ${s.topBarHeight}px; padding: 0 ${s.topBarPadding}px; }\n`;
+        css += `.player-section { padding: ${s.playerPaddingV}px ${s.playerPaddingH}px; gap: ${s.playerGap}px; }\n`;
+        css += `.avatar-container { width: ${s.avatarSize}px; height: ${s.avatarSize}px; }\n`;
+        css += `.player-name { font-size: ${s.playerNameSize}px; }\n`;
+        css += `.mini-ball { width: ${s.miniBallSize}px; height: ${s.miniBallSize}px; }\n`;
+        css += `.specific-balls { gap: ${s.miniBallGap}px; display: ${s.miniBallVisible ? 'flex' : 'none'}; }\n`;
+        css += `.shot-clock { width: ${s.shotClockSize}px; height: ${s.shotClockSize}px; font-size: ${s.shotClockFont}px; }\n`;
+        css += `.power-track { width: ${s.powerBarWidth}px; }\n`;
+        css += `#controls-left { height: ${s.powerBarHeight}px; }\n\n`;
+      }
+      
+      document.getElementById('cssPreview').textContent = css;
+    }
+    
+    // Control event listeners
+    controlIds.forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', () => {
+        if (id !== 'miniBallVisible') {
+          const valEl = document.getElementById(id + 'Val');
+          if (valEl) valEl.textContent = el.value + 'px';
+        }
+        saveControlsToSettings();
+        updateAllPreviews();
+      });
+    });
+    
+    // View toggle
+    document.getElementById('showAllBtn').onclick = () => {
+      showAll = true;
+      document.getElementById('showAllBtn').classList.add('active');
+      document.getElementById('showCurrentBtn').classList.remove('active');
+      updateAllPreviews();
+    };
+    
+    document.getElementById('showCurrentBtn').onclick = () => {
+      showAll = false;
+      document.getElementById('showCurrentBtn').classList.add('active');
+      document.getElementById('showAllBtn').classList.remove('active');
+      updateAllPreviews();
+    };
+    
+    // Download JSON
+    document.getElementById('downloadBtn').onclick = () => {
+      const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'eight-ball-ui-settings.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    
+    // Download CSS
+    document.getElementById('downloadCssBtn').onclick = () => {
+      const css = document.getElementById('cssPreview').textContent;
+      const blob = new Blob([css], { type: 'text/css' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'eight-ball-ui-responsive.css';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    
+    // Load JSON
+    document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
+    
+    document.getElementById('fileInput').onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const loaded = JSON.parse(event.target.result);
+            // Merge with defaults in case of missing keys
+            for (const bp in defaultSettings) {
+              if (loaded[bp]) {
+                settings[bp] = { ...defaultSettings[bp], ...loaded[bp] };
+              }
+            }
+            loadSettingsToControls();
+            updateAllPreviews();
+            alert('Settings loaded!');
+          } catch (err) {
+            alert('Error: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    
+    // Reset
+    document.getElementById('resetBtn').onclick = () => {
+      if (confirm('Reset all to defaults?')) {
+        settings = JSON.parse(JSON.stringify(defaultSettings));
+        loadSettingsToControls();
+        updateAllPreviews();
+      }
+    };
+    
+    // Initialize
+    initBreakpointButtons();
+    initPreviews();
+    loadSettingsToControls();
+  </script>
+</body>
+</html>
