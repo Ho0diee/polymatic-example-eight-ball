@@ -33,32 +33,44 @@ export class CueShot extends Middleware<BilliardContext> {
       }
       return;
     }
-
-    // Hide cue if it's not my turn (spectating opponent)
+    // Show cue if spectating opponent's shot (for animation)
+    if (this.context.spectatingShot) {
+      if (!this.context.cue && !this.context.gameOver) {
+        const ball = this.context.balls?.find(b => b.color === 'white');
+        if (ball) {
+          const cue = new CueStick();
+          cue.ball = ball;
+          cue.start.x = ball.position.x;
+          cue.start.y = ball.position.y;
+          this.context.cue = cue;
+          this.updateCuePosition();
+        }
+      }
+      // Animate cue as needed (could add more animation logic here)
+      return;
+    }
+    // Hide cue if it's not my turn (not spectating)
     if (!isMyTurn(this.context)) {
       if (this.context.cue) {
         this.context.cue = null;
       }
       return;
     }
-
     // Auto-spawn cue if it's my turn and missing
     if (!this.context.cue && !this.context.gameOver) {
-       const ball = this.context.balls?.find(b => b.color === 'white');
-       if (ball) {
-         const cue = new CueStick();
-         cue.ball = ball;
-         cue.start.x = ball.position.x;
-         cue.start.y = ball.position.y;
-         this.context.cue = cue;
-         this.updateCuePosition();
-       }
-       return;
+      const ball = this.context.balls?.find(b => b.color === 'white');
+      if (ball) {
+        const cue = new CueStick();
+        cue.ball = ball;
+        cue.start.x = ball.position.x;
+        cue.start.y = ball.position.y;
+        this.context.cue = cue;
+        this.updateCuePosition();
+      }
+      return;
     }
-
     const cue = this.context.cue;
     if (!cue || !cue.ball) return;
-    
     // Only update position, don't recreate
     cue.start.x = cue.ball.position.x;
     cue.start.y = cue.ball.position.y;

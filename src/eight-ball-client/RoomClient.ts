@@ -180,13 +180,18 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
         }
       }
     }
-    
+    // Set spectatingShot flag so CueShot can animate the opponent's shot
+    this.context.spectatingShot = true;
     // Find cue ball and apply shot locally
     const cueBall = this.context.balls?.find(b => b.color === 'white');
     if (cueBall && data.visibleShot) {
       // Emit cue-shot event to trigger local Physics simulation
       this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
     }
+    // After a short delay, clear spectating flag (duration of wind-up + shot)
+    setTimeout(() => {
+      this.context.spectatingShot = false;
+    }, 1200); // Adjust duration as needed for animation
   };
 
   handleCopyRoomId = () => {
