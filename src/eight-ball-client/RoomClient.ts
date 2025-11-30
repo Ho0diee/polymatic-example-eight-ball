@@ -188,10 +188,10 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
       // Emit cue-shot event to trigger local Physics simulation
       this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
     }
-    // After a short delay, clear spectating flag (duration of wind-up + shot)
-    setTimeout(() => {
+    // Clear spectating flag when the shot ends
+    this.once("shot-end", () => {
       this.context.spectatingShot = false;
-    }, 1200); // Adjust duration as needed for animation
+    });
   };
 
   handleCopyRoomId = () => {
