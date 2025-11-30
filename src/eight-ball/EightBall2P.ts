@@ -72,9 +72,12 @@ export class EightBall2P extends Middleware<BilliardContext> {
       // Foul! Emit foul event for UI, pass turn, then ball in hand
       this.emit("foul");
       this.emit("pass-turn");
-      this.context.foulCommitted = true;
-      this.context.ballInHand = true;
-      setTimeout(() => this.emit("ball-in-hand"), 400);
+      // Set ball-in-hand and foul for the new player (after turn passes)
+      setTimeout(() => {
+        this.context.foulCommitted = true;
+        this.context.ballInHand = true;
+        this.emit("ball-in-hand");
+      }, 400);
     } else if (hasOpponentBall) {
       // Pocketed opponent's ball (even if also pocketed own) - pass turn
       this.emit("pass-turn");
