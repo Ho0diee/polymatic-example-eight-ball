@@ -208,13 +208,39 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
         }
       }
     }
-    // Set spectatingShot flag so CueShot can animate the opponent's shot
+    
+    // Set spectatingShot flag so CueShot shows the cue
     (this.context as any).spectatingShot = true;
-    // Find cue ball and apply shot locally
+    
+    // Store the shot data and show cue strike animation before starting physics
     const cueBall = this.context.balls?.find(b => b.color === 'white');
     if (cueBall && data.visibleShot) {
-      // Emit cue-shot event to trigger local Physics simulation
-      this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
+      // Set opponent aim to match shot direction for cue display
+      const shotMag = Math.sqrt(data.visibleShot.x * data.visibleShot.x + data.visibleShot.y * data.visibleShot.y);
+      if (shotMag > 0) {
+        // Aim vector points opposite to shot direction (cue is behind ball)
+        this.context.opponentAim = { 
+          x: -data.visibleShot.x / shotMag, 
+          y: -data.visibleShot.y / shotMag 
+        };
+        // Set power to show pullback then strike
+        this.context.opponentPower = 0.8;
+        (this.context as any).spectatingShot = true;
+      }
+      
+      // Brief delay to show cue position, then animate strike and start physics
+      setTimeout(() => {
+        // Animate cue forward (reduce power to 0)
+        this.context.opponentPower = 0;
+        
+        // After strike animation, start physics
+        setTimeout(() => {
+          (this.context as any).spectatingShot = false;
+          this.context.opponentAiming = false;
+          // Now trigger the actual physics
+          this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
+        }, 100); // 100ms for strike animation
+      }, 150); // 150ms to show pulled back cue
     }
   };
   

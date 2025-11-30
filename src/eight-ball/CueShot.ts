@@ -68,18 +68,30 @@ export class CueShot extends Middleware<BilliardContext> {
       return;
     }
     
-    // Show cue if spectating opponent's shot (for animation) - brief moment before physics
+    // Show cue if spectating opponent's shot (for strike animation)
     if (ctx.spectatingShot) {
-      if (!ctx.cue && !ctx.gameOver) {
-        const ball = ctx.balls?.find(b => b.color === 'white');
-        if (ball) {
+      const ball = ctx.balls?.find(b => b.color === 'white');
+      if (ball) {
+        if (!ctx.cue) {
           const cue = new CueStick();
           cue.ball = ball;
           cue.start.x = ball.position.x;
           cue.start.y = ball.position.y;
           cue.isOpponent = true;
           ctx.cue = cue;
-          this.updateCuePosition();
+        }
+        // Update cue position based on opponent's aim during strike animation
+        const cue = ctx.cue;
+        cue.start.x = ball.position.x;
+        cue.start.y = ball.position.y;
+        cue.isOpponent = true;
+        
+        const opponentAim = ctx.opponentAim;
+        const opponentPower = ctx.opponentPower || 0;
+        if (opponentAim) {
+          const dist = 0.5 + (opponentPower * 8);
+          cue.end.x = cue.start.x + opponentAim.x * dist;
+          cue.end.y = cue.start.y + opponentAim.y * dist;
         }
       }
       return;
