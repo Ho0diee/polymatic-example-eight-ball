@@ -212,6 +212,9 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     // Find cue ball and apply shot locally - physics starts immediately
     const cueBall = this.context.balls?.find(b => b.color === 'white');
     if (cueBall && data.visibleShot) {
+      // Force shotInProgress to false to ensure Physics accepts the new shot
+      // (In case a server update arrived first and set it to true)
+      this.context.shotInProgress = false;
       this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
     }
   };
