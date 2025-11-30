@@ -1,71 +1,516 @@
-<!doctype html>
-<html>
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport"
-    content="user-scalable=no, width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0" />
-  <link rel="stylesheet" href="./style.css">
-  <meta name="theme-color" content="#323130" />
-  <meta name="color-scheme" content="dark" />
+  <meta charset="UTF-8">
+  <title>Web3 Pool - Front Page</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    :root {
+      --brand-100: #f6a623;   /* gold accent */
+      --brand-80: #f8c86b;
+      --brand-0: #ffffff;     /* keep as white for text uses */
+      --header-height: 60px;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+    }
+    body {
+      background: radial-gradient(circle at center, #23252b 0, #050608 60%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #f5f5f5;
+    }
+    .container {
+      background: #15171d;
+      border-radius: 16px;
+      border: 1px solid #262a34;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.75);
+      padding: 50px 40px 40px 40px;
+      min-width: 320px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+    h1 {
+      color: var(--brand-100);
+      margin-bottom: 12px;
+      font-size: 2.2rem;
+      letter-spacing: 2px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .subtitle {
+      color: #a0a6b5;
+      margin-bottom: 32px;
+      font-size: 0.95rem;
+    }
+    .form-group {
+      margin-bottom: 28px;
+    }
+    label {
+      display: block;
+      color: #e0e3ec;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-align: left;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid #2d313a;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      transition: all 0.3s ease;
+      background: #101218;
+      color: #f5f5f5;
+    }
+    input[type="text"]:focus {
+      border-color: var(--brand-100);
+      background: #15171d;
+      box-shadow: 0 0 0 2px rgba(246,166,35,0.25);
+    }
+    input[type="text"]::placeholder {
+      color: #737884;
+    }
+    .buttons-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .game-btn {
+      display: block;
+      width: 100%;
+      padding: 16px 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #111;
+      background: linear-gradient(to bottom, #fbd37a, #f6a623);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      letter-spacing: 0.5px;
+      box-shadow: 0 6px 18px rgba(246,166,35,0.55);
+    }
+    .game-btn:hover {
+      background: linear-gradient(to bottom, #ffe08f, #ffc557);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 22px rgba(246,166,35,0.7);
+    }
+    .game-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 3px 10px rgba(246,166,35,0.5);
+    }
+    .secondary-btn {
+      background: #20222b;
+      color: #f5f5f5;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+    }
+    .secondary-btn:hover {
+      background: #262936;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.75);
+    }
+    .error-message {
+      color: #ff5f5f;
+      font-size: 0.9rem;
+      margin-top: 8px;
+      display: none;
+    }
+    /* Wallet Connection Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.6);
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .modal-content {
+      background-color: #15171d;
+      margin: 10% auto;
+      padding: 30px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.9);
+      animation: slideIn 0.3s ease;
+      color: #f5f5f5;
+      border: 1px solid #262a34;
+    }
+    @keyframes slideIn {
+      from { transform: translateY(-50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .modal-header {
+      color: var(--brand-100);
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .wallet-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .wallet-btn {
+      padding: 16px;
+      border: 2px solid #2d313a;
+      background: #111218;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f5f5f5;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .wallet-btn:hover {
+      border-color: var(--brand-100);
+      background: rgba(246,166,35,0.08);
+      transform: translateX(4px);
+    }
+    .wallet-btn.preferred {
+      border-color: var(--brand-100);
+      background: rgba(246,166,35,0.15);
+    }
+    .close {
+      color: #999;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: color 0.3s ease;
+    }
+    .close:hover {
+      color: #ddd;
+    }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: var(--brand-100);
+    }
+    /* Payouts Modal */
+    .payout-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      border-bottom: 1px solid #262a34;
+      font-size: 0.9rem;
+    }
+    .payout-item:last-child {
+      border-bottom: none;
+    }
+    .payout-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
+    }
+    .payout-amount {
+      color: #6ee27f;
+      font-weight: 700;
+    }
+    .payout-link {
+      color: var(--brand-100);
+      text-decoration: none;
+      font-size: 0.8rem;
+      border: 1px solid var(--brand-100);
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .payout-link:hover {
+      background: var(--brand-100);
+      color: #111;
+    }
+  </style>
 </head>
-
 <body>
-  <!-- Slowmo vignette overlay -->
-  <div id="slowmo-vignette"></div>
+  <div id="phantom-warning" style="position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#d32f2f;color:#fff;padding:6px 18px;border-radius:8px;font-size:0.85rem;z-index:1001;box-shadow:0 2px 8px rgba(0,0,0,0.4);font-family:inherit;letter-spacing:0.2px;">If Phantom isn't popping up when you try to enter the game, refresh the page.</div>
+  
+  <!-- Proof of Payouts Button -->
+  <button id="payouts-btn" style="position:absolute;top:20px;left:20px;z-index:100;background:rgba(10,10,12,0.85);color:#f5f5f5;border:1px solid rgba(246,166,35,0.7);padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit;backdrop-filter:blur(4px);transition:all 0.3s;">
+    📜 Proof Of Payouts
+  </button>
 
+  <!-- Memecoin Promo -->
+  <div style="position:absolute;top:20px;right:20px;z-index:100;background:rgba(10,10,12,0.85);color:#f5f5f5;border:1px solid rgba(246,166,35,0.7);padding:12px 16px;border-radius:8px;backdrop-filter:blur(4px);text-align:center;box-shadow:0 4px 18px rgba(0,0,0,0.6);">
+    <div style="font-weight:bold;margin-bottom:4px;font-size:0.95rem;color:#ffd788;">BUY OUR MEME COIN</div>
+    <div style="font-size:0.8rem;opacity:0.9;color:#ddd;">CA: Coming Soon...</div>
+  </div>
+
+  <!-- main card -->
   <div class="container" style="position:relative;z-index:1;">
     <h1>Web3 Pool</h1>
     <p class="subtitle">Play real-stake 8-ball matches powered by Phantom &amp; Solana.</p>
+    
     <div class="form-group">
       <label for="playerName">Enter Your Name</label>
-      <input type="text" id="playerName" placeholder="Your name here..." autocomplete="off" maxlength="50" />
+      <input 
+        type="text" 
+        id="playerName" 
+        placeholder="Your name here..." 
+        autocomplete="off"
+        maxlength="50"
+      />
       <div class="error-message" id="errorMessage">Please enter a valid name</div>
     </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:8px;">
+      <div></div>
+      <button id="info-btn" style="background:#1f242c;color:#ffd788;border:1.5px solid #f6a623;border-radius:8px;padding:4px 16px;font-size:0.95rem;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.7);cursor:pointer;">Info</button>
+      <div id="info-box" style="display:none;position:absolute;top:60px;right:32px;max-width:320px;background:#15171d;color:#f5f5f5;border:1.5px solid #f6a623;border-radius:10px;padding:16px 18px;font-size:0.95rem;z-index:1002;box-shadow:0 4px 20px rgba(0,0,0,0.85);text-align:left;">
+        <b>Web3 Pool</b> is a skill-based betting game where you play 8-ball for real stakes.<br><br>
+        Payouts are typically <b>85%</b> of the prize pool after fees.<br><br>
+        Lobbies can include optional <b>re-match fees</b> of <b>2x</b> the original entry.*<br><br>
+        Once a lobby is full, the match auto-starts.<br><br>
+        <b>Payment information:</b> Only Solana is accepted via Phantom wallet. Funds are deducted according to the entry you choose and, if you win, the prize pool is sent automatically to the wallet you signed with.
+      </div>
+      <script>
+        // Info box toggle
+        const infoBtn = document.getElementById('info-btn');
+        const infoBox = document.getElementById('info-box');
+        infoBtn.addEventListener('click', () => {
+          infoBox.style.display = infoBox.style.display === 'none' ? 'block' : 'none';
+        });
+        // Hide info box if click outside
+        document.addEventListener('click', (e) => {
+          if (e.target !== infoBtn && !infoBox.contains(e.target)) {
+            infoBox.style.display = 'none';
+          }
+        });
+      </script>
+    </div>
+
     <div class="buttons-container">
       <div style="display:flex;flex-direction:column;align-items:center;">
-        <button class="game-btn" id="createGameBtn">💰 Create Game Link</button>
-        <input type="text" id="gameLink" readonly style="margin-top:10px;width:100%;display:none;" />
-        <button class="game-btn secondary-btn" id="copyGameLinkBtn" style="display:none;">Copy Game Link</button>
+        <button class="game-btn" onclick="goLobby(5, 85)">💰 Pay $5 Entry - Win $85</button>
+        <span id="lobby-size-5" style="font-size:0.85rem;color:#ffd788;margin-top:2px;margin-bottom:10px;">0/2 in lobby</span>
       </div>
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <button class="game-btn" onclick="goLobby(10, 170)">💰 Pay $10 Entry - Win $170</button>
+        <span id="lobby-size-10" style="font-size:0.85rem;color:#ffd788;margin-top:2px;margin-bottom:10px;">0/2 in lobby</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <button class="game-btn" onclick="goLobby(20, 340)">💰 Pay $20 Entry - Win $340</button>
+        <span id="lobby-size-20" style="font-size:0.85rem;color:#ffd788;margin-top:2px;margin-bottom:10px;">0/2 in lobby</span>
+      </div>
+      <!-- Join Custom Game -->
       <div style="display:flex;flex-direction:column;align-items:center;">
         <button class="game-btn secondary-btn" onclick="joinCustomGame()">🎱 Join Custom Game</button>
       </div>
     </div>
   </div>
+
+  <!-- Payouts Modal -->
+  <div id="payouts-modal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <span class="close" id="close-payouts">&times;</span>
+      <div class="modal-header">Recent Payouts</div>
+      <div id="payouts-list">
+        <div class="loading">Loading blockchain data...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/@solana/web3.js@latest"></script>
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
   <script>
-    // Create game link logic
-    document.getElementById('createGameBtn').onclick = function() {
+    // Payouts Modal Logic
+    const payoutsBtn = document.getElementById('payouts-btn');
+    const payoutsModal = document.getElementById('payouts-modal');
+    const closePayouts = document.getElementById('close-payouts');
+    const payoutsList = document.getElementById('payouts-list');
+
+    payoutsBtn.onclick = function() {
+      payoutsModal.style.display = "block";
+      fetchPayouts();
+    }
+    closePayouts.onclick = function() {
+      payoutsModal.style.display = "none";
+    }
+    window.onclick = function(event) {
+      if (event.target == payoutsModal) {
+        payoutsModal.style.display = "none";
+      }
+    }
+
+    async function fetchPayouts() {
+      try {
+        payoutsList.innerHTML = '<div class="loading">Loading payouts from server...</div>';
+        
+        const res = await fetch('/api/payout-history');
+        if (!res.ok) throw new Error("Server returned " + res.status);
+        
+        const payouts = await res.json();
+
+        payoutsList.innerHTML = ''; 
+
+        if (payouts.length === 0) {
+          payoutsList.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;">No payouts recorded yet.<br><small>Be the first to win!</small></div>';
+          return;
+        }
+
+        payouts.forEach(payout => {
+          const shortDest = payout.wallet.slice(0, 4) + '...' + payout.wallet.slice(-4);
+          const date = new Date(payout.timestamp).toLocaleDateString() + ' ' + new Date(payout.timestamp).toLocaleTimeString();
+
+          const item = document.createElement('div');
+          item.className = 'payout-item';
+          item.innerHTML = `
+            <div class="payout-details">
+              <span>🏆 Winner: <b>${shortDest}</b></span>
+              <span style="font-size:0.8rem;color:#888;">${date}</span>
+            </div>
+            <span class="payout-amount">$3.00</span>
+            <a href="https://solscan.io/tx/${payout.signature}" target="_blank" class="payout-link">View TX</a>
+          `;
+          payoutsList.appendChild(item);
+        });
+
+      } catch (err) {
+        console.error("Error fetching payouts:", err);
+        payoutsList.innerHTML = '<div style="padding:20px;text-align:center;color:#ff5f5f;">Error loading data. Ensure server is running.</div>';
+      }
+    }
+
+    // --- Snail background removed ---
+
+    const TREASURY_WALLET = '7ah7Lsn2rn3zePsF8wXT2yotUTYJ5AashiqZQjEYWo4v';
+    const ALCHEMY_RPC = 'https://solana-mainnet.g.alchemy.com/v2/-KAA0DFXvuY5h08hsfDwO';
+
+    async function getSolPriceUSD() {
+      const resp = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+      const data = await resp.json();
+      return data.solana.usd;
+    }
+
+    // Lobby Size Tracking for 5 / 10 / 20
+    function updateLobbySizes() {
+      const lobby5  = sessionStorage.getItem('lobby5')  === 'joined' ? 1 : 0;
+      const lobby10 = sessionStorage.getItem('lobby10') === 'joined' ? 1 : 0;
+      const lobby20 = sessionStorage.getItem('lobby20') === 'joined' ? 1 : 0;
+      document.getElementById('lobby-size-5').textContent  = `${lobby5}/2 in lobby`;
+      document.getElementById('lobby-size-10').textContent = `${lobby10}/2 in lobby`;
+      document.getElementById('lobby-size-20').textContent = `${lobby20}/2 in lobby`;
+    }
+
+    updateLobbySizes();
+
+    async function goLobby(entryUSD, payout) {
       const playerName = document.getElementById('playerName').value.trim();
       if (!playerName) {
-        document.getElementById('errorMessage').style.display = 'block';
+        alert('Please enter your name!');
         return;
       }
-      document.getElementById('errorMessage').style.display = 'none';
-      // Generate a unique game code
-      const gameCode = Math.random().toString(36).substr(2, 8);
-      const link = window.location.origin + '/?join=' + gameCode;
-      document.getElementById('gameLink').value = link;
-      document.getElementById('gameLink').style.display = 'block';
-      document.getElementById('copyGameLinkBtn').style.display = 'block';
-      // Store game code for later joining
-      sessionStorage.setItem('gameCode', gameCode);
-      sessionStorage.setItem('playerName', playerName);
-    };
-    document.getElementById('copyGameLinkBtn').onclick = function() {
-      const link = document.getElementById('gameLink').value;
-      navigator.clipboard.writeText(link);
-      alert('Game link copied! Share it with your friend to join.');
-    };
-    // Join custom game logic
+      if (!window.solana || !window.solana.isPhantom) {
+        alert('Please install the Phantom wallet extension to continue.');
+        window.open('https://phantom.app/', '_blank');
+        return;
+      }
+      try {
+        const solPrice = await getSolPriceUSD();
+        const solAmount = entryUSD / solPrice;
+        const lamports = Math.floor(solAmount * solanaWeb3.LAMPORTS_PER_SOL);
+
+        const resp = await window.solana.connect();
+        const fromPubkey = new solanaWeb3.PublicKey(resp.publicKey.toString());
+        const toPubkey = new solanaWeb3.PublicKey(TREASURY_WALLET);
+        const connection = new solanaWeb3.Connection(ALCHEMY_RPC, 'confirmed');
+        const { blockhash } = await connection.getLatestBlockhash();
+        const transaction = new solanaWeb3.Transaction({
+          recentBlockhash: blockhash,
+          feePayer: fromPubkey
+        }).add(
+          solanaWeb3.SystemProgram.transfer({
+            fromPubkey,
+            toPubkey,
+            lamports
+          })
+        );
+        const signed = await window.solana.signTransaction(transaction);
+        const signature = await connection.sendRawTransaction(signed.serialize());
+        // wait for finalization
+        let status = null;
+        for (let i = 0; i < 30; i++) {
+          const res = await connection.getSignatureStatus(signature, { searchTransactionHistory: true });
+          status = res && res.value;
+          if (status && status.confirmationStatus === 'finalized') break;
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        if (status && status.confirmationStatus === 'finalized' && !status.err) {
+          try {
+            const recordRes = await fetch('/api/start-game', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                wallet: fromPubkey.toString(),
+                entryFee: entryUSD,
+                signature: signature
+              })
+            });
+            
+            const recordData = await recordRes.json();
+            if (!recordRes.ok) throw new Error(recordData.error || "Server rejected wallet record");
+            sessionStorage.setItem('gameId', recordData.gameId);
+
+          } catch (e) {
+            console.error("Failed to record wallet.", e);
+            alert("⚠️ Server not connected! You are entering DEMO MODE.\n\nSecurity checks and payouts will NOT work until you run 'node server.js'.");
+          }
+
+          sessionStorage.setItem('playerName', playerName);
+          sessionStorage.setItem('playerWallet', fromPubkey.toString());
+          sessionStorage.setItem('entryFee', entryUSD);
+          sessionStorage.setItem('prizeAmount', payout);
+
+          if (entryUSD === 5)  sessionStorage.setItem('lobby5',  'joined');
+          if (entryUSD === 10) sessionStorage.setItem('lobby10', 'joined');
+          if (entryUSD === 20) sessionStorage.setItem('lobby20', 'joined');
+
+          updateLobbySizes();
+          window.location.href = 'game-lobby.html';
+        } else {
+          alert('Transaction failed, not finalized, or took too long. Please try again.');
+        }
+      } catch (err) {
+        alert('Transaction failed or cancelled.');
+        console.error(err);
+      }
+    }
+
+    // Custom game stub
     function joinCustomGame() {
       const code = prompt('Enter custom game code (or share link):');
       if (!code) return;
-      // Store code and redirect to game lobby
-      sessionStorage.setItem('gameCode', code);
-      window.location.href = 'game-lobby.html?join=' + code;
+      // TODO: hook into your custom-game flow
+      alert('Custom games not wired yet. Code entered: ' + code);
     }
   </script>
 </body>
-
 </html>
