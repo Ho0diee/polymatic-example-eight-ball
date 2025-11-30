@@ -63,6 +63,19 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
         this.extendRoomLease();
       });
 
+      // Relay aim updates to other players so they can see opponent aiming
+      socket.on("aim-update", (data) => {
+        if (this.context.turn.current !== player.turn) return;
+        // Broadcast to all OTHER clients (not the sender)
+        socket.broadcast.emit("opponent-aim", data);
+      });
+
+      // Relay power updates so opponents see pullback animation
+      socket.on("power-update", (data) => {
+        if (this.context.turn.current !== player.turn) return;
+        socket.broadcast.emit("opponent-power", data);
+      });
+
       // Send current game state to the newly connected player
       this.sendStateToSocket(socket);
 

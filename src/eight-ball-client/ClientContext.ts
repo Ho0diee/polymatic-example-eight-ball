@@ -10,6 +10,11 @@ export class ClientBilliardContext extends BilliardContext {
   room?: string;
   auth?: Auth;
   turnAnnouncementInProgress?: boolean;
+  
+  // Opponent aiming state (for showing their cue movement)
+  opponentAiming?: boolean;
+  opponentAim?: { x: number; y: number };
+  opponentPower?: number;
 }
 
 export const isMyTurn = (context: ClientBilliardContext) => {

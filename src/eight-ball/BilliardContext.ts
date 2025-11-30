@@ -94,6 +94,7 @@ export class CueStick {
   ball: Ball;
   start: Point = { x: 0, y: 0 };
   end: Point = { x: -1, y: 0 };
+  isOpponent: boolean = false; // True if this is opponent's cue (render transparent)
 }
 
 export interface Player {
@@ -121,6 +122,9 @@ export class BilliardContext {
   // Slowmo camera focus
   slowmoActive? = false;
   slowmoFocus?: { x: number; y: number } | null = null;
+  
+  // Spectating opponent's shot animation
+  spectatingShot? = false;
 
   // multiplayer fields
   players?: Player[] = [];

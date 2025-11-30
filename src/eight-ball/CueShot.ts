@@ -1,7 +1,7 @@
 import { Middleware } from "polymatic";
 
 import { CueStick, type BilliardContext } from "./BilliardContext";
-import { isMyTurn } from "../eight-ball-client/ClientContext";
+import { isMyTurn, type ClientBilliardContext } from "../eight-ball-client/ClientContext";
 
 /**
  * Implements cue and shot:
@@ -26,50 +26,88 @@ export class CueShot extends Middleware<BilliardContext> {
   }
 
   handleFrameLoop() {
+    const ctx = this.context as ClientBilliardContext;
+    
     // Hide cue during shot (balls moving)
-    if (this.context.shotInProgress) {
-      if (this.context.cue) {
-        this.context.cue = null;
+    if (ctx.shotInProgress) {
+      if (ctx.cue) {
+        ctx.cue = null;
+      }
+      // Clear opponent aiming state when shot starts
+      ctx.opponentAiming = false;
+      return;
+    }
+    
+    // Show opponent's cue if they're aiming (not my turn but opponent is aiming)
+    if (!isMyTurn(ctx) && ctx.opponentAiming) {
+      const ball = ctx.balls?.find(b => b.color === 'white');
+      if (ball) {
+        if (!ctx.cue) {
+          const cue = new CueStick();
+          cue.ball = ball;
+          cue.start.x = ball.position.x;
+          cue.start.y = ball.position.y;
+          cue.isOpponent = true; // Mark as opponent's cue for transparency
+          ctx.cue = cue;
+        }
+        // Update cue position based on opponent's aim
+        const cue = ctx.cue;
+        cue.start.x = ball.position.x;
+        cue.start.y = ball.position.y;
+        cue.isOpponent = true;
+        
+        const opponentAim = ctx.opponentAim;
+        const opponentPower = ctx.opponentPower || 0;
+        if (opponentAim) {
+          // Use opponent's aim vector
+          const dist = 0.5 + (opponentPower * 8);
+          cue.end.x = cue.start.x + opponentAim.x * dist;
+          cue.end.y = cue.start.y + opponentAim.y * dist;
+        }
       }
       return;
     }
-    // Show cue if spectating opponent's shot (for animation)
-    if (this.context.spectatingShot) {
-      if (!this.context.cue && !this.context.gameOver) {
-        const ball = this.context.balls?.find(b => b.color === 'white');
+    
+    // Show cue if spectating opponent's shot (for animation) - brief moment before physics
+    if (ctx.spectatingShot) {
+      if (!ctx.cue && !ctx.gameOver) {
+        const ball = ctx.balls?.find(b => b.color === 'white');
         if (ball) {
           const cue = new CueStick();
           cue.ball = ball;
           cue.start.x = ball.position.x;
           cue.start.y = ball.position.y;
-          this.context.cue = cue;
+          cue.isOpponent = true;
+          ctx.cue = cue;
           this.updateCuePosition();
         }
       }
-      // Animate cue as needed (could add more animation logic here)
       return;
     }
-    // Hide cue if it's not my turn (not spectating)
-    if (!isMyTurn(this.context)) {
-      if (this.context.cue) {
-        this.context.cue = null;
+    
+    // Hide cue if it's not my turn (and opponent not aiming)
+    if (!isMyTurn(ctx)) {
+      if (ctx.cue) {
+        ctx.cue = null;
       }
       return;
     }
+    
     // Auto-spawn cue if it's my turn and missing
-    if (!this.context.cue && !this.context.gameOver) {
-      const ball = this.context.balls?.find(b => b.color === 'white');
+    if (!ctx.cue && !ctx.gameOver) {
+      const ball = ctx.balls?.find(b => b.color === 'white');
       if (ball) {
         const cue = new CueStick();
         cue.ball = ball;
         cue.start.x = ball.position.x;
         cue.start.y = ball.position.y;
-        this.context.cue = cue;
+        cue.isOpponent = false;
+        ctx.cue = cue;
         this.updateCuePosition();
       }
       return;
     }
-    const cue = this.context.cue;
+    const cue = ctx.cue;
     if (!cue || !cue.ball) return;
     // Only update position, don't recreate
     cue.start.x = cue.ball.position.x;
@@ -122,11 +160,17 @@ export class CueShot extends Middleware<BilliardContext> {
     }
     
     this.updateCuePosition();
+    
+    // Broadcast aim update to opponent
+    this.emit("aim-update", { aimX: this.aimVector.x, aimY: this.aimVector.y });
   }
 
   handlePowerChange(power: number) {
     this.power = power;
     this.updateCuePosition();
+    
+    // Broadcast power update to opponent
+    this.emit("power-update", { power: this.power });
   }
 
   handlePowerRelease(power: number) {

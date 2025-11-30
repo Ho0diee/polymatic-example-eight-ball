@@ -28,6 +28,9 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     this.on("deactivate", this.handleDeactivate);
     this.on("cue-shot", this.handleCueShot);
     this.on("game-start", this.handleGameStart);
+    this.on("aim-update", this.handleAimUpdate);
+    this.on("power-update", this.handlePowerUpdate);
+    this.on("shot-end", this.handleShotEnd);
   }
 
   handleActivate = () => {
@@ -98,6 +101,8 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     });
     this.io.on("room-update", this.handleServerRoomState);
     this.io.on("shot-broadcast", this.handleShotBroadcast);
+    this.io.on("opponent-aim", this.handleOpponentAim);
+    this.io.on("opponent-power", this.handleOpponentPower);
   };
 
   handleDeactivate = () => {
@@ -169,7 +174,30 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     this.io?.emit("cue-shot", data);
   };
 
+  handleAimUpdate = (data: { aimX: number; aimY: number }) => {
+    this.io?.emit("aim-update", data);
+  };
+
+  handlePowerUpdate = (data: { power: number }) => {
+    this.io?.emit("power-update", data);
+  };
+
+  handleOpponentAim = (data: { aimX: number; aimY: number }) => {
+    // Store opponent's aim so we can show their cue stick
+    this.context.opponentAim = { x: data.aimX, y: data.aimY };
+    this.context.opponentAiming = true;
+  };
+
+  handleOpponentPower = (data: { power: number }) => {
+    // Store opponent's power for pullback animation
+    this.context.opponentPower = data.power;
+  };
+
   handleShotBroadcast = (data: { visibleShot: { x: number; y: number }; ballPositions: Array<{ key: string; x: number; y: number }> }) => {
+    // Clear opponent aiming state - they've shot
+    this.context.opponentAiming = false;
+    this.context.opponentPower = 0;
+    
     // Sync ball positions from server before applying shot (ensures all clients start from same state)
     if (data.ballPositions && this.context.balls) {
       for (const bp of data.ballPositions) {
@@ -181,17 +209,18 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
       }
     }
     // Set spectatingShot flag so CueShot can animate the opponent's shot
-    this.context.spectatingShot = true;
+    (this.context as any).spectatingShot = true;
     // Find cue ball and apply shot locally
     const cueBall = this.context.balls?.find(b => b.color === 'white');
     if (cueBall && data.visibleShot) {
       // Emit cue-shot event to trigger local Physics simulation
       this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
     }
-    // Clear spectating flag when the shot ends
-    this.once("shot-end", () => {
-      this.context.spectatingShot = false;
-    });
+  };
+  
+  // Listen for shot-end to clear spectating flag  
+  handleShotEnd = () => {
+    (this.context as any).spectatingShot = false;
   };
 
   handleCopyRoomId = () => {

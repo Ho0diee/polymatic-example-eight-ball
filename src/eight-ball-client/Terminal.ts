@@ -2538,6 +2538,20 @@ export class Terminal extends Middleware<ClientBilliardContext> {
       }
       (element as SVGElement).style.display = "";
       
+      // Apply transparency for opponent's cue stick
+      const isOpponentCue = data.isOpponent === true;
+      const cueOpacity = isOpponentCue ? "0.5" : "1";
+      (element as SVGElement).style.opacity = cueOpacity;
+      
+      // Hide guide lines for opponent (they shouldn't see aiming assists)
+      if (isOpponentCue) {
+        guideLine.style.display = "none";
+        guidePath.style.display = "none";
+        targetLine.style.display = "none";
+        deflectLine.style.display = "none";
+        ghostBall.style.display = "none";
+      }
+      
       // Normalized direction (pointing from ball AWAY from cue.end = toward shot direction)
       // Cue tip is on opposite side, so we use negative direction
       const nx = -dx / dist;
