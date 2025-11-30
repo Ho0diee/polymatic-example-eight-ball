@@ -1,7 +1,7 @@
 import { Dataset, Driver, Memo, Middleware } from "polymatic";
 
 import { CueStick, Ball, Pocket, Rail, Table, type BilliardContext } from "../eight-ball/BilliardContext";
-import { type ClientBilliardContext } from "./ClientContext";
+import { type ClientBilliardContext, isMyTurn } from "./ClientContext";
 
 // Import the physics lookup table (unit vectors for ball directions)
 import PHYSICS_LOOKUP_JSON from "../../physics-lookup.json";
@@ -672,7 +672,7 @@ export class Terminal extends Middleware<ClientBilliardContext> {
 
   handlePointerDown = (event: PointerEvent) => {
     // Handle ball placement mode
-    if (this.context.ballInHand) {
+    if (this.context.ballInHand && isMyTurn(this.context)) {
       this.handlePlacementPointerDown(event);
       return;
     }
@@ -688,7 +688,7 @@ export class Terminal extends Middleware<ClientBilliardContext> {
 
   handlePointerMove = (event: PointerEvent) => {
     // Handle ball placement mode
-    if (this.context.ballInHand) {
+    if (this.context.ballInHand && isMyTurn(this.context)) {
       this.handlePlacementPointerMove(event);
       return;
     }
@@ -750,7 +750,7 @@ export class Terminal extends Middleware<ClientBilliardContext> {
 
   handlePointerUp = (event: PointerEvent) => {
     // Handle ball placement mode
-    if (this.context.ballInHand) {
+    if (this.context.ballInHand && isMyTurn(this.context)) {
       this.handlePlacementPointerUp(event);
       return;
     }
