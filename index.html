@@ -14,121 +14,58 @@
   <!-- Slowmo vignette overlay -->
   <div id="slowmo-vignette"></div>
 
-  <!-- Waiting Room / Lobby Screen -->
-  <div id="waiting-room" class="hidden">
-    <div class="waiting-room-content">
-      <h2>🎱 Waiting Room</h2>
-      <div class="room-id-section">
-        <span class="room-id-label">Room Code:</span>
-        <span class="room-id-value" id="waiting-room-id">---</span>
-        <button class="copy-btn" id="copy-room-id">📋 Copy</button>
-      </div>
-      <div class="players-section">
-        <div class="player-slot" id="player-slot-1">
-          <div class="player-slot-avatar"></div>
-          <span class="player-slot-name">Waiting...</span>
-          <span class="player-slot-status"></span>
-        </div>
-        <div class="vs-divider">VS</div>
-        <div class="player-slot" id="player-slot-2">
-          <div class="player-slot-avatar"></div>
-          <span class="player-slot-name">Waiting...</span>
-          <span class="player-slot-status"></span>
-        </div>
-      </div>
-      <div class="waiting-status" id="waiting-status">
-        <div class="spinner"></div>
-        <span>Waiting for opponent to join...</span>
-      </div>
-      <button class="leave-btn" id="leave-waiting-room">Leave Room</button>
+  <div class="container" style="position:relative;z-index:1;">
+    <h1>Web3 Pool</h1>
+    <p class="subtitle">Play real-stake 8-ball matches powered by Phantom &amp; Solana.</p>
+    <div class="form-group">
+      <label for="playerName">Enter Your Name</label>
+      <input type="text" id="playerName" placeholder="Your name here..." autocomplete="off" maxlength="50" />
+      <div class="error-message" id="errorMessage">Please enter a valid name</div>
     </div>
-  </div>
-  
-  <svg id="polymatic-eight-ball" class="terminal"></svg>
-  
-  <!-- Top Bar UI -->
-  <div id="top-bar">
-    <!-- Player 1 Section -->
-    <div class="player-section left active" id="player1-section">
-      <div class="section-glow"></div>
-      <div class="avatar-container">
-        <div class="avatar-img"></div>
+    <div class="buttons-container">
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <button class="game-btn" id="createGameBtn">💰 Create Game Link</button>
+        <input type="text" id="gameLink" readonly style="margin-top:10px;width:100%;display:none;" />
+        <button class="game-btn secondary-btn" id="copyGameLinkBtn" style="display:none;">Copy Game Link</button>
       </div>
-      <div class="player-details">
-        <div class="name-row">
-          <span class="player-name">Player 1</span>
-        </div>
-        <div class="specific-balls" id="player1-balls">
-          <!-- Balls appear here as they are pocketed -->
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Shot Clock -->
-    <div class="shot-clock" id="shot-clock">10</div>
-
-    <!-- Player 2 Section -->
-    <div class="player-section right" id="player2-section">
-      <div class="section-glow"></div>
-      <div class="player-details">
-        <div class="name-row">
-          <span class="player-name">Player 2</span>
-        </div>
-        <div class="specific-balls" id="player2-balls">
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-          <div class="mini-ball empty-slot"></div>
-        </div>
-      </div>
-      <div class="avatar-container">
-        <div class="avatar-img"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <button class="game-btn secondary-btn" onclick="joinCustomGame()">🎱 Join Custom Game</button>
       </div>
     </div>
   </div>
-
-  <!-- Turn Announcement Overlay -->
-  <div class="turn-announcement" id="turn-announcement">
-    <div class="turn-text" id="turn-text">Player 1's Turn</div>
-  </div>
-
-  <!-- Power Bar (Left Side) -->
-  <div id="controls-left">
-    <div class="power-bar-container" id="power-bar-left">
-      <div class="power-track">
-        <div class="power-segment"></div>
-        <div class="power-segment"></div>
-        <div class="power-segment"></div>
-        <div class="power-segment"></div>
-        <div class="power-segment"></div>
-      </div>
-      <div class="power-handle"></div>
-    </div>
-  </div>
-
-  <div style="position: absolute; bottom: 4em; left: 0.5em; z-index: 5;">
-    <div id="game-status"></div>
-    <div id="room-status"></div>
-  </div>
-  <div id="lobby-buttons" style="position: absolute; bottom: 0.5em; left: 0.5em; z-index: 10;">
-    <button id="play-offline">Play Offline</button>
-    <button id="create-room">Create Room</button>
-    <div class="join-room-section">
-      <input type="text" id="room-code-input" placeholder="xxx-xxx-xxx" maxlength="11" />
-      <button id="join-room">Join</button>
-    </div>
-  </div>
-  <script type="module" src="./src/client"></script>
+  <script>
+    // Create game link logic
+    document.getElementById('createGameBtn').onclick = function() {
+      const playerName = document.getElementById('playerName').value.trim();
+      if (!playerName) {
+        document.getElementById('errorMessage').style.display = 'block';
+        return;
+      }
+      document.getElementById('errorMessage').style.display = 'none';
+      // Generate a unique game code
+      const gameCode = Math.random().toString(36).substr(2, 8);
+      const link = window.location.origin + '/?join=' + gameCode;
+      document.getElementById('gameLink').value = link;
+      document.getElementById('gameLink').style.display = 'block';
+      document.getElementById('copyGameLinkBtn').style.display = 'block';
+      // Store game code for later joining
+      sessionStorage.setItem('gameCode', gameCode);
+      sessionStorage.setItem('playerName', playerName);
+    };
+    document.getElementById('copyGameLinkBtn').onclick = function() {
+      const link = document.getElementById('gameLink').value;
+      navigator.clipboard.writeText(link);
+      alert('Game link copied! Share it with your friend to join.');
+    };
+    // Join custom game logic
+    function joinCustomGame() {
+      const code = prompt('Enter custom game code (or share link):');
+      if (!code) return;
+      // Store code and redirect to game lobby
+      sessionStorage.setItem('gameCode', code);
+      window.location.href = 'game-lobby.html?join=' + code;
+    }
+  </script>
 </body>
 
 </html>
