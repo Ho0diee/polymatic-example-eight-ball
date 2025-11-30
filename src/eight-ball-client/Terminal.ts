@@ -12,135 +12,6 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const STROKE_WIDTH = 0.006 / 2;
 
 // ============================================
-// AUDIO MANAGER - Synthesized sound effects
-// ============================================
-class PoolAudioManager {
-  private audioContext: AudioContext | null = null;
-  private initialized = false;
-
-  // Initialize on first user interaction
-  init() {
-    if (this.initialized) return;
-    try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      this.initialized = true;
-    } catch (e) {
-      console.warn("Web Audio API not supported");
-    }
-  }
-
-  // Ball collision "clack" sound
-  playBallHit(impactSpeed: number) {
-    if (!this.audioContext) return;
-    
-    const volume = Math.min(1.0, Math.max(0.1, impactSpeed * 0.8));
-    const duration = 0.08 + impactSpeed * 0.02;
-    
-    const osc = this.audioContext.createOscillator();
-    const gain = this.audioContext.createGain();
-    const filter = this.audioContext.createBiquadFilter();
-    
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(800 + impactSpeed * 400, this.audioContext.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(200, this.audioContext.currentTime + duration);
-    
-    filter.type = "highpass";
-    filter.frequency.value = 400;
-    
-    gain.gain.setValueAtTime(volume * 0.3, this.audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
-    
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.audioContext.destination);
-    
-    osc.start();
-    osc.stop(this.audioContext.currentTime + duration);
-  }
-
-  // Rail collision "thud" sound
-  playRailHit(speed: number) {
-    if (!this.audioContext) return;
-    
-    const volume = Math.min(0.6, Math.max(0.1, speed * 0.4));
-    const duration = 0.1;
-    
-    const osc = this.audioContext.createOscillator();
-    const gain = this.audioContext.createGain();
-    
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(150 + speed * 100, this.audioContext.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(60, this.audioContext.currentTime + duration);
-    
-    gain.gain.setValueAtTime(volume * 0.25, this.audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
-    
-    osc.connect(gain);
-    gain.connect(this.audioContext.destination);
-    
-    osc.start();
-    osc.stop(this.audioContext.currentTime + duration);
-  }
-
-  // Pocket sound - satisfying drop
-  playPocket() {
-    if (!this.audioContext) return;
-    
-    const duration = 0.25;
-    
-    const osc1 = this.audioContext.createOscillator();
-    const gain1 = this.audioContext.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(120, this.audioContext.currentTime);
-    osc1.frequency.exponentialRampToValueAtTime(40, this.audioContext.currentTime + duration);
-    gain1.gain.setValueAtTime(0.4, this.audioContext.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
-    osc1.connect(gain1);
-    gain1.connect(this.audioContext.destination);
-    osc1.start();
-    osc1.stop(this.audioContext.currentTime + duration);
-    
-    const osc2 = this.audioContext.createOscillator();
-    const gain2 = this.audioContext.createGain();
-    osc2.type = "triangle";
-    osc2.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.02);
-    osc2.frequency.exponentialRampToValueAtTime(200, this.audioContext.currentTime + 0.15);
-    gain2.gain.setValueAtTime(0.15, this.audioContext.currentTime + 0.02);
-    gain2.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15);
-    osc2.connect(gain2);
-    gain2.connect(this.audioContext.destination);
-    osc2.start(this.audioContext.currentTime + 0.02);
-    osc2.stop(this.audioContext.currentTime + 0.2);
-  }
-
-  // Cue strike sound
-  playCueStrike(power: number) {
-    if (!this.audioContext) return;
-    
-    const volume = Math.min(0.5, 0.15 + power * 0.35);
-    const duration = 0.06 + power * 0.04;
-    
-    const osc = this.audioContext.createOscillator();
-    const gain = this.audioContext.createGain();
-    
-    osc.type = "square";
-    osc.frequency.setValueAtTime(1200 + power * 600, this.audioContext.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(400, this.audioContext.currentTime + duration);
-    
-    gain.gain.setValueAtTime(volume * 0.2, this.audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
-    
-    osc.connect(gain);
-    gain.connect(this.audioContext.destination);
-    
-    osc.start();
-    osc.stop(this.audioContext.currentTime + duration);
-  }
-}
-
-const poolAudio = new PoolAudioManager();
-
-// ============================================
 // PHYSICS LOOKUP TABLE
 // Pre-computed unit vectors from Planck.js simulation
 // Key: "cutAngle_power" -> { tx, ty, cx, cy } unit vectors
@@ -293,12 +164,6 @@ export class Terminal extends Middleware<ClientBilliardContext> {
     this.on("frame-loop", this.handleFrameLoop);
     this.on("main-start", this.handleStart);
     this.on("ball-in-hand", this.handleBallInHand);
-    
-    // Audio events
-    this.on("ball-collision", this.handleBallCollision);
-    this.on("rail-collision", this.handleRailCollision);
-    this.on("ball-pocketed", this.handleBallPocketedAudio);
-    this.on("cue-shot", this.handleCueShotAudio);
 
     this.dataset.addDriver(this.tableDriver);
     this.dataset.addDriver(this.pocketDriver); // Pockets before rails so rails cover them
@@ -1486,29 +1351,6 @@ export class Terminal extends Middleware<ClientBilliardContext> {
         this.vignetteElement.classList.remove('active');
       }
     }
-  };
-  
-  // Audio event handlers
-  handleBallCollision = (data: { ball1: any; ball2: any; impactSpeed: number }) => {
-    poolAudio.init();
-    poolAudio.playBallHit(data.impactSpeed);
-  };
-  
-  handleRailCollision = (data: { ball: any; speed: number }) => {
-    poolAudio.init();
-    poolAudio.playRailHit(data.speed);
-  };
-  
-  handleBallPocketedAudio = (data: { ball: any; pocket: any }) => {
-    poolAudio.init();
-    poolAudio.playPocket();
-  };
-  
-  handleCueShotAudio = (data: { ball: any; shot: any }) => {
-    poolAudio.init();
-    const shotMag = Math.sqrt(data.shot.x * data.shot.x + data.shot.y * data.shot.y);
-    const power = Math.min(1, shotMag / 0.06); // Normalize to 0-1
-    poolAudio.playCueStrike(power);
   };
   
   updateSlowmoCamera = () => {

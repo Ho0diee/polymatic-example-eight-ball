@@ -30,27 +30,21 @@ export class SoundManager extends Middleware<ClientBilliardContext> {
     const initAudio = async () => {
       if (this.audioContext) return;
       
-      this.audioContext = new AudioContext();
-      await this.preloadSounds();
-      this.isLoaded = true;
-      
-      // Remove listeners after init
-      document.removeEventListener("click", initAudio);
-      document.removeEventListener("touchstart", initAudio);
-      document.removeEventListener("keydown", initAudio);
+      try {
+        this.audioContext = new AudioContext();
+        this.preloadSounds(); // Don't await - load in background
+      } catch (e) {
+        // Will try again on user interaction
+      }
     };
 
-    // Try to init immediately, but also add listeners for user interaction
-    document.addEventListener("click", initAudio, { once: false });
-    document.addEventListener("touchstart", initAudio, { once: false });
-    document.addEventListener("keydown", initAudio, { once: false });
+    // Add listeners for user interaction (required by browsers)
+    document.addEventListener("click", initAudio, { once: true });
+    document.addEventListener("touchstart", initAudio, { once: true });
+    document.addEventListener("keydown", initAudio, { once: true });
     
     // Try immediate init (may work if user already interacted)
-    try {
-      await initAudio();
-    } catch (e) {
-      // Will init on user interaction
-    }
+    initAudio();
   };
 
   private async preloadSounds() {
@@ -63,24 +57,27 @@ export class SoundManager extends Middleware<ClientBilliardContext> {
       "pocket": ["/sounds/pocket-1.wav", "/sounds/pocket-2.wav", "/sounds/pocket-3.wav"],
     };
 
+    // Load all sounds in parallel for speed
+    const loadPromises: Promise<void>[] = [];
+    
     for (const [name, files] of Object.entries(soundFiles)) {
       const buffers: AudioBuffer[] = [];
+      this.sounds.set(name, buffers);
+      
       for (const file of files) {
-        try {
-          const response = await fetch(file);
-          const arrayBuffer = await response.arrayBuffer();
-          const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-          buffers.push(audioBuffer);
-        } catch (e) {
-          console.warn(`Failed to load sound: ${file}`, e);
-        }
-      }
-      if (buffers.length > 0) {
-        this.sounds.set(name, buffers);
+        loadPromises.push(
+          fetch(file)
+            .then(r => r.arrayBuffer())
+            .then(ab => this.audioContext!.decodeAudioData(ab))
+            .then(buf => { buffers.push(buf); })
+            .catch(() => {}) // Silently ignore failed loads
+        );
       }
     }
     
-    console.log(`[SoundManager] Loaded ${this.sounds.size} sound groups`);
+    Promise.all(loadPromises).then(() => {
+      this.isLoaded = true;
+    });
   }
 
   private playSound(name: string, volume: number = 1.0) {
