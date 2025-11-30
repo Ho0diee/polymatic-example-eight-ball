@@ -33,9 +33,17 @@ export class Physics extends Middleware<BilliardContext> {
   }
 
   handleCueShot(data: { ball: Ball; shot: Vec2Value }) {
-    if (this.context.shotInProgress || this.context.gameOver) return;
+    console.log("[Physics] handleCueShot called", { shotInProgress: this.context.shotInProgress, gameOver: this.context.gameOver });
+    if (this.context.shotInProgress || this.context.gameOver) {
+      console.log("[Physics] Ignoring shot because shotInProgress or gameOver is true");
+      return;
+    }
     const body = this.ballDriver.ref(data.ball.key);
-    if (!body) return;
+    if (!body) {
+      console.error("[Physics] Could not find physics body for ball", data.ball.key);
+      return;
+    }
+    console.log("[Physics] Applying impulse to ball", data.ball.key);
     this.asleep = false;
     body.applyLinearImpulse(data.shot, body.getPosition());
     this.context.shotInProgress = true;

@@ -118,6 +118,7 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     // Only accept ball updates when shot is NOT in progress (final sync)
     if (this.context.shotInProgress && data.balls) {
       // Skip ball updates during shot - we're running physics locally
+      // console.log("[RoomClient] Ignoring server ball update because shotInProgress is true");
       const { balls, ...rest } = data;
       Object.assign(this.context, rest);
     } else {
@@ -212,10 +213,13 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     // Find cue ball and apply shot locally - physics starts immediately
     const cueBall = this.context.balls?.find(b => b.color === 'white');
     if (cueBall && data.visibleShot) {
+      console.log("[RoomClient] Received shot-broadcast. Forcing shotInProgress=false and emitting cue-shot locally.");
       // Force shotInProgress to false to ensure Physics accepts the new shot
       // (In case a server update arrived first and set it to true)
       this.context.shotInProgress = false;
       this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
+    } else {
+      console.warn("[RoomClient] Received shot-broadcast but could not find cue ball or visibleShot", { cueBall: !!cueBall, visibleShot: !!data.visibleShot });
     }
   };
   
