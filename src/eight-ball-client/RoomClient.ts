@@ -99,6 +99,7 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
       this.connectionError = null;
       this.printRoomStatus();
     });
+
     this.io.on("room-update", this.handleServerRoomState);
     this.io.on("shot-broadcast", this.handleShotBroadcast);
     this.io.on("opponent-aim", this.handleOpponentAim);

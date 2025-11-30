@@ -9,6 +9,7 @@ import { type ClientBilliardContext } from "./ClientContext";
 import { ScoreboardUI } from "./ScoreboardUI";
 import { Physics } from "../eight-ball/Physics";
 import { EightBall2P } from "../eight-ball/EightBall2P";
+import { SoundManager } from "./SoundManager";
 
 /**
  * Main class for the billiard game client.
@@ -24,5 +25,6 @@ export class MainClient extends Middleware<ClientBilliardContext> {
     this.use(new RoomClient());
     this.use(new StatusOnline());
     this.use(new ScoreboardUI());
+    this.use(new SoundManager());  // Audio feedback
   }
 }

@@ -11,6 +11,7 @@ import { type BilliardContext } from "../eight-ball/BilliardContext";
 import { StatusOffline } from "./StatusOffline";
 import { Rack } from "../eight-ball/Rack";
 import { ScoreboardUI } from "./ScoreboardUI";
+import { SoundManager } from "./SoundManager";
 
 /**
  * Main class for the offline billiard game.
@@ -28,6 +29,7 @@ export class MainOffline extends Middleware<BilliardContext> {
     this.use(new Terminal());
     this.use(new StatusOffline());
     this.use(new ScoreboardUI());
+    this.use(new SoundManager());  // Audio feedback
     this.on("activate", this.handleActivate);
   }
 
