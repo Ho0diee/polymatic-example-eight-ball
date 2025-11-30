@@ -3,7 +3,7 @@ import { type ClientBilliardContext } from "./ClientContext";
 
 /**
  * Manages all game audio using the Web Audio API for low-latency playback.
- * Preloads sounds and plays them in response to game events.
+ * Uses physics engine events for accurate collision timing.
  */
 export class SoundManager extends Middleware<ClientBilliardContext> {
   private audioContext: AudioContext | null = null;
@@ -20,9 +20,9 @@ export class SoundManager extends Middleware<ClientBilliardContext> {
     super();
     this.on("activate", this.handleActivate);
     this.on("shot-start", this.handleShotStart);
+    this.on("ball-pocketed", this.handleBallPocketed);
     this.on("ball-collision", this.handleBallCollision);
     this.on("rail-collision", this.handleRailCollision);
-    this.on("ball-pocketed", this.handleBallPocketed);
   }
 
   handleActivate = async () => {
@@ -31,7 +31,8 @@ export class SoundManager extends Middleware<ClientBilliardContext> {
       if (this.audioContext) return;
       
       try {
-        this.audioContext = new AudioContext();
+        // Use interactive latency hint for lowest possible delay
+        this.audioContext = new AudioContext({ latencyHint: 'interactive' });
         this.preloadSounds(); // Don't await - load in background
       } catch (e) {
         // Will try again on user interaction
@@ -45,6 +46,22 @@ export class SoundManager extends Middleware<ClientBilliardContext> {
     
     // Try immediate init (may work if user already interacted)
     initAudio();
+  };
+
+  handleBallCollision = (data: { ball1: any; ball2: any; impactSpeed: number }) => {
+    // Scale volume by impact speed (0.05 to 2.0 typical range)
+    const volume = Math.min(1.0, data.impactSpeed / 1.5);
+    if (volume > 0.05) {
+      this.playSound("ball-ball", volume);
+    }
+  };
+
+  handleRailCollision = (data: { ball: any; speed: number }) => {
+    // Scale volume by speed - boost sensitivity
+    const volume = Math.min(1.0, data.speed / 1.0);
+    if (volume > 0.05) {
+      this.playSound("ball-rail", volume);
+    }
   };
 
   private async preloadSounds() {
@@ -83,6 +100,11 @@ export class SoundManager extends Middleware<ClientBilliardContext> {
   private playSound(name: string, volume: number = 1.0) {
     if (!this.audioContext || !this.isLoaded || this.isMuted) return;
     
+    // Resume AudioContext if suspended (browser autoplay policy)
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
+    
     // Throttle same sound type
     const now = performance.now();
     const lastTime = this.lastPlayTime.get(name) || 0;
@@ -106,27 +128,12 @@ export class SoundManager extends Middleware<ClientBilliardContext> {
     source.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
 
-    source.start(0);
+    // Start immediately using audio context time (most precise)
+    source.start(this.audioContext.currentTime);
   }
 
   handleShotStart = () => {
     this.playSound("cue-shot", 0.8);
-  };
-
-  handleBallCollision = (data: { ball1: any; ball2: any; impactSpeed: number }) => {
-    // Scale volume by impact speed (0.05 to 2.0 typical range)
-    const volume = Math.min(1.0, data.impactSpeed / 1.5);
-    if (volume > 0.1) {
-      this.playSound("ball-ball", volume);
-    }
-  };
-
-  handleRailCollision = (data: { ball: any; speed: number }) => {
-    // Scale volume by speed
-    const volume = Math.min(1.0, data.speed / 1.2);
-    if (volume > 0.15) {
-      this.playSound("ball-rail", volume);
-    }
   };
 
   handleBallPocketed = (data: { ball: any; pocket: any }) => {

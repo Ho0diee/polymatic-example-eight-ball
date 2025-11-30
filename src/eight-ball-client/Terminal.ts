@@ -1,5 +1,4 @@
 import { Dataset, Driver, Memo, Middleware } from "polymatic";
-import { World, Circle, Polygon, Body, Settings } from "planck";
 
 import { CueStick, Ball, Pocket, Rail, Table, type BilliardContext } from "../eight-ball/BilliardContext";
 import { type ClientBilliardContext } from "./ClientContext";
@@ -194,316 +193,6 @@ export class Terminal extends Middleware<ClientBilliardContext> {
     this.container.appendChild(this.scorecardGroup);
   }
 
-  // Hacker mode - activated by typing "opopopopop"
-  hackerMode = false;
-  hackerModePlayer: string | null = null; // Track which player activated hacker mode
-  hackerModeBuffer = '';
-  hackerModeCode = 'opopopopop';
-  
-  // Physics simulation cache for predictions
-  predictionCache: {
-    cueBallEnd: { x: number; y: number } | null;
-    targetBallEnd: { x: number; y: number } | null;
-    targetBallKey: string | null;
-    targetBallDir: { x: number; y: number } | null;
-    targetBallSpeed: number; // Speed of target ball after hit
-    cueBallDirAfterHit: { x: number; y: number } | null;
-    cueBallSpeedAfterHit: number; // Speed of cue ball after hit
-    hitPoint: { x: number; y: number } | null;
-    targetBallPos: { x: number; y: number } | null;
-    cueBallPath: { x: number; y: number }[];
-    targetBallPath: { x: number; y: number }[];
-    willPocket: boolean;
-    pocketedBallKey: string | null;
-    firstWallBounce: { point: { x: number; y: number }; dirAfter: { x: number; y: number }; speedAfter: number } | null;
-    lastShotDirX: number;
-    lastShotDirY: number;
-    lastCuePosX: number;
-    lastCuePosY: number;
-  } = {
-    cueBallEnd: null, targetBallEnd: null, targetBallKey: null, targetBallDir: null,
-    targetBallSpeed: 0,
-    cueBallDirAfterHit: null,
-    cueBallSpeedAfterHit: 0,
-    hitPoint: null, targetBallPos: null, cueBallPath: [], targetBallPath: [],
-    willPocket: false, pocketedBallKey: null, firstWallBounce: null,
-    lastShotDirX: 0, lastShotDirY: 0, lastCuePosX: 0, lastCuePosY: 0
-  };
-  
-  // Simulate shot using physics engine to get accurate predictions
-  simulateShot(shotDir: { x: number; y: number }, power: number): { 
-    cueBallEnd: { x: number; y: number } | null;
-    targetBallEnd: { x: number; y: number } | null;
-    targetBallKey: string | null;
-    targetBallDir: { x: number; y: number } | null;
-    targetBallSpeed: number;
-    cueBallDirAfterHit: { x: number; y: number } | null;
-    cueBallSpeedAfterHit: number;
-    hitPoint: { x: number; y: number } | null;
-    targetBallPos: { x: number; y: number } | null;
-    cueBallPath: { x: number; y: number }[];
-    targetBallPath: { x: number; y: number }[];
-    willPocket: boolean;
-    pocketedBallKey: string | null;
-    firstWallBounce: { point: { x: number; y: number }; dirAfter: { x: number; y: number }; speedAfter: number } | null;
-  } {
-    if (!this.context.balls || !this.context.rails || !this.context.table || !this.context.pockets) {
-      return { cueBallEnd: null, targetBallEnd: null, targetBallKey: null, targetBallDir: null, targetBallSpeed: 0, cueBallDirAfterHit: null, cueBallSpeedAfterHit: 0, hitPoint: null, targetBallPos: null, cueBallPath: [], targetBallPath: [], willPocket: false, pocketedBallKey: null, firstWallBounce: null };
-    }
-    
-    const cueBall = this.context.balls.find(b => b.color === 'white');
-    if (!cueBall) {
-      return { cueBallEnd: null, targetBallEnd: null, targetBallKey: null, targetBallDir: null, targetBallSpeed: 0, cueBallDirAfterHit: null, cueBallSpeedAfterHit: 0, hitPoint: null, targetBallPos: null, cueBallPath: [], targetBallPath: [], willPocket: false, pocketedBallKey: null, firstWallBounce: null };
-    }
-    
-    // Create a temporary physics world (matching Physics.ts setup)
-    Settings.velocityThreshold = 0;
-    const world = new World();
-    
-    // Physics constants (matching Physics.ts)
-    const LINEAR_DAMPING = 2.2;
-    const ANGULAR_DAMPING = 1.5;
-    const BALL_FRICTION = 0.1;
-    const BALL_RESTITUTION = 0.99;
-    const RAIL_FRICTION = 0.1;
-    const RAIL_RESTITUTION = 0.9;
-    const MAX_FORCE = 0.06;
-    
-    // Track pocketed balls via collision detection
-    const pocketedBalls = new Set<string>();
-    const pockets = this.context.pockets;
-    
-    // Create pocket bodies (IMPORTANT: like Physics.ts, pockets are sensors)
-    const pocketBodies = new Map<string, Body>();
-    for (const pocket of pockets) {
-      const body = world.createBody({
-        type: 'static',
-        position: { x: pocket.position.x, y: pocket.position.y },
-        userData: { type: 'pocket', key: pocket.key },
-      });
-      body.createFixture({
-        shape: new Circle(pocket.radius),
-        isSensor: true, // Pockets don't apply force, just detect
-        userData: { type: 'pocket', key: pocket.key },
-      });
-      pocketBodies.set(pocket.key, body);
-    }
-    
-    // Create ball bodies
-    const ballBodies = new Map<string, Body>();
-    for (const ball of this.context.balls) {
-      const body = world.createBody({
-        type: 'dynamic',
-        bullet: true,
-        position: { x: ball.position.x, y: ball.position.y },
-        linearDamping: LINEAR_DAMPING,
-        angularDamping: ANGULAR_DAMPING,
-        userData: { type: 'ball', key: ball.key },
-      });
-      body.createFixture({
-        shape: new Circle(ball.radius),
-        friction: BALL_FRICTION,
-        restitution: BALL_RESTITUTION,
-        density: 1,
-        userData: { type: 'ball', key: ball.key },
-      });
-      ballBodies.set(ball.key, body);
-    }
-    
-    // Create rail bodies (matching Physics.ts exactly)
-    for (const rail of this.context.rails) {
-      const body = world.createBody({ type: 'static' });
-      body.createFixture({
-        shape: new Polygon(rail.vertices),
-        friction: RAIL_FRICTION,
-        restitution: RAIL_RESTITUTION,
-      });
-    }
-    
-    // Set up pocket collision detection (like Physics.ts)
-    world.on('begin-contact', (contact) => {
-      const fA = contact.getFixtureA();
-      const fB = contact.getFixtureB();
-      const dataA = fA.getUserData() as { type: string; key: string } | null;
-      const dataB = fB.getUserData() as { type: string; key: string } | null;
-      
-      if (!dataA || !dataB) return;
-      
-      const ball = dataA?.type === 'ball' ? dataA : dataB?.type === 'ball' ? dataB : null;
-      const pocket = dataA?.type === 'pocket' ? dataA : dataB?.type === 'pocket' ? dataB : null;
-      
-      if (ball && pocket) {
-        pocketedBalls.add(ball.key);
-      }
-    });
-    
-    // Apply impulse to cue ball
-    const cueBallBody = ballBodies.get(cueBall.key);
-    if (!cueBallBody) {
-      return { cueBallEnd: null, targetBallEnd: null, targetBallKey: null, targetBallDir: null, targetBallSpeed: 0, cueBallDirAfterHit: null, cueBallSpeedAfterHit: 0, hitPoint: null, targetBallPos: null, cueBallPath: [], targetBallPath: [], willPocket: false, pocketedBallKey: null, firstWallBounce: null };
-    }
-    
-    const impulse = power * MAX_FORCE;
-    cueBallBody.applyLinearImpulse(
-      { x: shotDir.x * impulse, y: shotDir.y * impulse },
-      cueBallBody.getPosition()
-    );
-    
-    // Track cue ball path and first ball collision
-    let firstHitBallKey: string | null = null;
-    let targetBallDir: { x: number; y: number } | null = null;
-    let targetBallSpeed = 0;
-    let hitPoint: { x: number; y: number } | null = null;
-    let targetBallPos: { x: number; y: number } | null = null;
-    let cueBallDirAfterHit: { x: number; y: number } | null = null;
-    let cueBallSpeedAfterHit = 0;
-    let firstWallBounce: { point: { x: number; y: number }; dirAfter: { x: number; y: number }; speedAfter: number } | null = null;
-    const cueBallPath: { x: number; y: number }[] = [];
-    
-    // Record starting position
-    const startPos = cueBallBody.getPosition();
-    cueBallPath.push({ x: startPos.x, y: startPos.y });
-    let lastRecordedPos = { x: startPos.x, y: startPos.y };
-    
-    // Track previous velocity direction to detect wall bounces
-    let prevVelDir = { x: shotDir.x, y: shotDir.y };
-    
-    // Step simulation until cue ball hits another ball or stops
-    const timeStep = 1 / 120;
-    const maxSteps = 360; // 3 seconds - enough for bounces
-    
-    for (let step = 0; step < maxSteps; step++) {
-      world.step(timeStep);
-      
-      // Record cue ball position periodically (every 6 frames = 20 points per second)
-      const cuePos = cueBallBody.getPosition();
-      const cueVel = cueBallBody.getLinearVelocity();
-      const cueSpeed = Math.sqrt(cueVel.x * cueVel.x + cueVel.y * cueVel.y);
-      
-      // Detect wall bounce (significant direction change) - only track first one
-      if (!firstWallBounce && cueSpeed > 0.01) {
-        const currentDir = { x: cueVel.x / cueSpeed, y: cueVel.y / cueSpeed };
-        const dotProduct = prevVelDir.x * currentDir.x + prevVelDir.y * currentDir.y;
-        // If dot product < 0.7, direction changed significantly (bounce)
-        if (dotProduct < 0.7) {
-          firstWallBounce = {
-            point: { x: cuePos.x, y: cuePos.y },
-            dirAfter: { x: currentDir.x, y: currentDir.y },
-            speedAfter: cueSpeed
-          };
-        }
-        prevVelDir = currentDir;
-      }
-      
-      const distFromLast = Math.sqrt(
-        (cuePos.x - lastRecordedPos.x) ** 2 + 
-        (cuePos.y - lastRecordedPos.y) ** 2
-      );
-      if (distFromLast > 0.02) { // Record if moved more than 2cm
-        cueBallPath.push({ x: cuePos.x, y: cuePos.y });
-        lastRecordedPos = { x: cuePos.x, y: cuePos.y };
-      }
-
-      // Check if any ball started moving (means cue ball hit it)
-      for (const [key, body] of ballBodies) {
-        if (key === cueBall.key) continue;
-        const vel = body.getLinearVelocity();
-        const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
-        if (speed > 0.001) {
-          // Found the ball that got hit - capture everything RIGHT NOW
-          firstHitBallKey = key;
-          targetBallDir = { x: vel.x / speed, y: vel.y / speed };
-          targetBallSpeed = speed; // Capture target ball speed
-          hitPoint = { x: cuePos.x, y: cuePos.y };
-          const targetPos = body.getPosition();
-          targetBallPos = { x: targetPos.x, y: targetPos.y };
-          // Capture cue ball direction and speed after hit
-          cueBallSpeedAfterHit = cueSpeed;
-          if (cueSpeed > 0.01) {
-            cueBallDirAfterHit = { x: cueVel.x / cueSpeed, y: cueVel.y / cueSpeed };
-          }
-          // Add final position to path
-          cueBallPath.push({ x: cuePos.x, y: cuePos.y });
-          break;
-        }
-      }
-      
-      // If we found a hit ball, stop
-      if (firstHitBallKey) break;
-      
-      // Also stop if cue ball has stopped moving
-      if (cueSpeed < 0.01) break;
-    }
-    
-    // Now track the target ball's path and check for pocketing (using collision detection)
-    const targetBallPath: { x: number; y: number }[] = [];
-    let willPocket = false;
-    let pocketedBallKey: string | null = null;
-    
-    if (firstHitBallKey && targetBallPos) {
-      const targetBody = ballBodies.get(firstHitBallKey);
-      if (targetBody) {
-        targetBallPath.push({ x: targetBallPos.x, y: targetBallPos.y });
-        let lastTargetPos = { x: targetBallPos.x, y: targetBallPos.y };
-        
-        // Continue simulation to track target ball and detect pocketing via physics
-        for (let step = 0; step < 5 * 120; step++) {
-          world.step(timeStep);
-          
-          const pos = targetBody.getPosition();
-          const distFromLast = Math.sqrt(
-            (pos.x - lastTargetPos.x) ** 2 + 
-            (pos.y - lastTargetPos.y) ** 2
-          );
-          if (distFromLast > 0.02) {
-            targetBallPath.push({ x: pos.x, y: pos.y });
-            lastTargetPos = { x: pos.x, y: pos.y };
-          }
-          
-          // Check if target ball was pocketed (via collision callback)
-          if (pocketedBalls.has(firstHitBallKey)) {
-            willPocket = true;
-            pocketedBallKey = firstHitBallKey;
-            // Find which pocket it went into
-            for (const pocket of pockets) {
-              const dx = pos.x - pocket.position.x;
-              const dy = pos.y - pocket.position.y;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist < pocket.radius * 1.5) {
-                targetBallPath.push({ x: pocket.position.x, y: pocket.position.y });
-                break;
-              }
-            }
-            break;
-          }
-          
-          // Stop if ball stopped
-          const vel = targetBody.getLinearVelocity();
-          const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
-          if (speed < 0.01) {
-            targetBallPath.push({ x: pos.x, y: pos.y });
-            break;
-          }
-        }
-      }
-    }
-    
-    const cueBallPos = cueBallBody.getPosition();
-    const cueBallEnd = { x: cueBallPos.x, y: cueBallPos.y };
-    
-    let targetBallEnd: { x: number; y: number } | null = null;
-    
-    if (firstHitBallKey) {
-      const targetBody = ballBodies.get(firstHitBallKey);
-      if (targetBody) {
-        const pos = targetBody.getPosition();
-        targetBallEnd = { x: pos.x, y: pos.y };
-      }
-    }
-    
-    return { cueBallEnd, targetBallEnd, targetBallKey: firstHitBallKey, targetBallDir, targetBallSpeed, cueBallDirAfterHit, cueBallSpeedAfterHit, hitPoint, targetBallPos, cueBallPath, targetBallPath, willPocket, pocketedBallKey, firstWallBounce };
-  }
-
   handleActivate() {
     const svg = document.getElementById("polymatic-eight-ball");
     if (svg && svg instanceof SVGSVGElement) {
@@ -516,7 +205,6 @@ export class Terminal extends Middleware<ClientBilliardContext> {
       this.container.parentElement?.addEventListener("pointerup", this.handlePointerUp);
       
       this.setupPowerControl();
-      this.setupHackerMode();
 
       window.addEventListener("resize", this.handleWindowResize);
       window.addEventListener("orientationchange", this.handleWindowResize);
@@ -524,56 +212,6 @@ export class Terminal extends Middleware<ClientBilliardContext> {
     } else {
       console.error("Container SVG element not found");
     }
-  }
-  
-  setupHackerMode() {
-    // Listen for key presses to detect the secret code
-    document.addEventListener('keydown', (e) => {
-      // Check if it's the hacker mode player's turn
-      // Hacker mode only works when it's the turn of the player who activated it
-      const currentTurn = this.context.turn?.current;
-      const isHackerPlayer = this.hackerMode && this.hackerModePlayer === currentTurn;
-      
-      // Handle 'o' key for auto-shoot (only in hacker mode for the activating player)
-      // Shoots at power 1.0 - just aim at an "IN!" shot and press O
-      if (isHackerPlayer && e.key.toLowerCase() === 'o') {
-        if (!this.context.shotInProgress && !this.context.ballInHand) {
-          this.emit("user-power-release", 1.0);
-        }
-        return;
-      }
-      
-      this.hackerModeBuffer += e.key.toLowerCase();
-      // Keep buffer limited
-      if (this.hackerModeBuffer.length > 20) {
-        this.hackerModeBuffer = this.hackerModeBuffer.slice(-20);
-      }
-      // Check for code
-      if (this.hackerModeBuffer.includes(this.hackerModeCode)) {
-        this.hackerMode = !this.hackerMode;
-        // Track which player's turn it was when they activated hacker mode
-        // Use context.turn.current so it works for both offline and online
-        this.hackerModePlayer = this.hackerMode ? (this.context.turn?.current ?? null) : null;
-        this.hackerModeBuffer = '';
-        
-        // Show activation message with player info
-        const playerNum = this.hackerModePlayer !== null ? (parseInt(this.hackerModePlayer) + 1) : null;
-        const playerInfo = playerNum !== null ? ` (Player ${playerNum})` : '';
-        const msg = document.createElement('div');
-        msg.style.cssText = `
-          position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-          background: ${this.hackerMode ? 'rgba(0, 255, 0, 0.9)' : 'rgba(255, 0, 0, 0.9)'};
-          color: ${this.hackerMode ? '#000' : '#fff'}; padding: 20px 40px;
-          font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold;
-          border-radius: 10px; z-index: 10000;
-          box-shadow: 0 0 30px ${this.hackerMode ? '#0f0' : '#f00'};
-          text-transform: uppercase; letter-spacing: 3px;
-        `;
-        msg.textContent = this.hackerMode ? `🎯 HACKER MODE ON${playerInfo} (O=shoot) 🎯` : '❌ HACKER MODE OFF ❌';
-        document.body.appendChild(msg);
-        setTimeout(() => msg.remove(), 1500);
-      }
-    });
   }
   
   calculateCutAngle(cueBallPos: { x: number; y: number }, targetBallPos: { x: number; y: number }, pocketPos: { x: number; y: number }): number {
@@ -1509,8 +1147,17 @@ export class Terminal extends Middleware<ClientBilliardContext> {
       outline.classList.add("ball-outline");
       group.appendChild(outline);
 
-      // Store metadata for update (include shadow element)
-      (group as any).__ballMeta = { type, number, r, dynamicGroup, shadow };
+      // Store metadata for update (include shadow element and cached SVG elements)
+      (group as any).__ballMeta = { 
+        type, number, r, dynamicGroup, shadow,
+        hasRendered: false, // Track if ball has been rendered at least once
+        // Cached SVG elements for reuse (created on demand)
+        cap1: null as SVGPathElement | null,
+        cap2: null as SVGPathElement | null,
+        spot: null as SVGPathElement | null,
+        textGroup: null as SVGGElement | null,
+        text: null as SVGTextElement | null
+      };
 
       this.ballsGroup.appendChild(group);
       return group;
@@ -1564,7 +1211,13 @@ export class Terminal extends Middleware<ClientBilliardContext> {
         const angle = dist / data.radius; 
         const qRot = Quaternion.fromAxisAngle(axis, angle);
         state.q = qRot.multiply(state.q).normalize();
+      } else if (meta.hasRendered) {
+        // Ball is stationary and already rendered - skip expensive rendering updates
+        return;
       }
+      
+      // Mark that we've rendered at least once
+      meta.hasRendered = true;
       
       // Clear dynamic elements
       while (dynamicGroup.firstChild) {
@@ -1607,7 +1260,7 @@ export class Terminal extends Middleware<ClientBilliardContext> {
           const maxZ = edgeCenterZ + edgeReach;
           
           if (maxZ > 0) {
-            const arcSamples = 200;
+            const arcSamples = 48; // Reduced from 200 for performance
             
             const outerArc: {x: number, y: number, z: number}[] = [];
             for (let j = 0; j <= arcSamples; j++) {
@@ -1733,7 +1386,7 @@ export class Terminal extends Middleware<ClientBilliardContext> {
           const angle = Math.atan2(numCenter.y, numCenter.x) * 180 / Math.PI;
           
           // Sample points around the dot circle
-          const arcSamples = 100;
+          const arcSamples = 32; // Reduced from 100 for performance
           const dotPoints: {x: number, y: number, z: number}[] = [];
           
           for (let j = 0; j <= arcSamples; j++) {
@@ -2604,39 +2257,11 @@ export class Terminal extends Middleware<ClientBilliardContext> {
         }
       }
       
-      // --- RUN PHYSICS SIMULATION FIRST ---
-      // This overrides the raycast results with actual physics predictions
-      // Use a very small threshold for smooth updates (0.0001 = 0.01% change triggers update)
-      const aimChanged = 
-        Math.abs(shotDx - this.predictionCache.lastShotDirX) > 0.0001 ||
-        Math.abs(shotDy - this.predictionCache.lastShotDirY) > 0.0001 ||
-        Math.abs(ballX - this.predictionCache.lastCuePosX) > 0.0001 ||
-        Math.abs(ballY - this.predictionCache.lastCuePosY) > 0.0001;
-      
-      if (aimChanged && !this.context.shotInProgress) {
-        const simResult = this.simulateShot({ x: shotDx, y: shotDy }, 1.0);
-        this.predictionCache = {
-          ...simResult,
-          lastShotDirX: shotDx,
-          lastShotDirY: shotDy,
-          lastCuePosX: ballX,
-          lastCuePosY: ballY,
-        };
-      }
-      
       // Determine what the FIRST thing hit is: wall or ball
       // The raycast already calculated this correctly - it traces a straight line
       // If raycast says 'wall', there's no ball DIRECTLY in the path, so show wall
-      // Only use simulation's ball hit if raycast ALSO found a ball (for more accurate position)
       
       const raycastHitType = hitType; // Save original raycast result
-      const raycastGuideEndX = guideEndX;
-      const raycastGuideEndY = guideEndY;
-      
-      // Trust the raycast for hit detection AND position - it's geometrically accurate
-      // Raycast calculates exact contact point, simulation hitPoint is AFTER physics overlap
-      // Keep ALL raycast values (hitBallKey, hitBallPos, guideEndX/Y) - don't override with simulation
-      // Only use simulation for target ball PATH (after the hit) and pocket prediction
       
       // Calculate target ball direction geometrically from ghost ball position to target ball center
       // This is the direction the target ball will travel after being hit
@@ -2717,121 +2342,15 @@ export class Terminal extends Middleware<ClientBilliardContext> {
       }
       // If raycast hit a ball, keep all the raycast values (already set correctly above)
       
-      // Check if hacker mode is active for this player
-      const currentTurn = this.context.turn?.current;
-      const isHackerPlayer = this.hackerMode && this.hackerModePlayer === currentTurn;
-      
-      const DIRECTION_LINE_LENGTH = 0.15; // Length of direction indicator lines
       const cueBallRadius = data.ball?.radius || 0.031;
       // Ghost ball visual radius matches the ball's visible size (physics radius minus stroke width)
       const ghostBallVisualRadius = cueBallRadius - STROKE_WIDTH;
       
-      if (isHackerPlayer) {
-        // ========== HACKER MODE ==========
-        // Use full simulation results, show paths with bounces, "IN!" indicator
-        // NOTE: guideEndX/Y already set correctly by raycast above - don't override with simulation's hitPoint
-        
-        // Draw cue ball path with bounces if available
-        const cuePath = this.predictionCache.cueBallPath;
-        if (cuePath && cuePath.length > 2) {
-          guideLine.style.display = "none";
-          guidePath.style.display = "";
-          guidePath.setAttribute("stroke", lineColor);
-          guidePath.setAttribute("opacity", lineOpacity);
-          // Use simulation path but replace the last point with the geometrically correct ghost ball position
-          const pathPoints = cuePath.slice(0, -1); // All points except last
-          pathPoints.push({ x: guideEndX, y: guideEndY }); // Add correct endpoint
-          const points = pathPoints.map(p => `${p.x},${p.y}`).join(' ');
-          guidePath.setAttribute("points", points);
-        } else {
-          guidePath.style.display = "none";
-          guideLine.style.display = "";
-          guideLine.setAttribute("stroke", lineColor);
-          guideLine.setAttribute("opacity", lineOpacity);
-          guideLine.setAttribute("x1", String(ballX));
-          guideLine.setAttribute("y1", String(ballY));
-          guideLine.setAttribute("x2", String(guideEndX));
-          guideLine.setAttribute("y2", String(guideEndY));
-        }
-        
-        // Show target ball full path - start from actual ball center
-        const targetPath = this.predictionCache.targetBallPath;
-        if (hitType === 'ball' && targetPath && targetPath.length > 1 && hitBallPos) {
-          hackerTargetPath.style.display = "";
-          // Replace first point with actual ball center position (simulation position may be off)
-          const correctedPath = [hitBallPos, ...targetPath.slice(1)];
-          const points = correctedPath.map(p => `${p.x},${p.y}`).join(' ');
-          hackerTargetPath.setAttribute("points", points);
-          hackerTargetPath.setAttribute("stroke", lineColor);
-          hackerTargetPath.setAttribute("opacity", "0.6");
-          hackerTargetPath.setAttribute("stroke-dasharray", "0.008, 0.004");
-        } else {
-          hackerTargetPath.style.display = "none";
-        }
-        
-        // Ghost ball at collision point
-        if (hitType === 'ball') {
-          ghostBall.style.display = "";
-          ghostBall.setAttribute("cx", String(guideEndX));
-          ghostBall.setAttribute("cy", String(guideEndY));
-          ghostBall.setAttribute("r", String(ghostBallVisualRadius));
-          ghostBall.setAttribute("stroke", lineColor);
-        } else {
-          ghostBall.style.display = "none";
-        }
-        
-        // "IN!" indicator for pocketable shots
-        if (this.predictionCache.willPocket && this.predictionCache.targetBallPos) {
-          hackerInLabel.style.display = "";
-          const labelX = this.predictionCache.targetBallPos.x;
-          const labelY = this.predictionCache.targetBallPos.y - 0.06;
-          hackerInLabel.setAttribute("x", String(labelX));
-          hackerInLabel.setAttribute("y", String(labelY));
-          hackerInLabel.textContent = "🎱 IN!";
-          hackerInLabel.setAttribute("fill", "#00ff00");
-          hackerInLabel.setAttribute("stroke", "#003300");
-          hackerInLabel.setAttribute("stroke-width", "0.002");
-        } else {
-          hackerInLabel.style.display = "none";
-        }
-        
-        // Cue ball end position marker - shows where cue ball will stop (crucial for position play)
-        if (this.predictionCache.cueBallEnd) {
-          cueBallEndMarker.style.display = "";
-          cueBallEndMarker.setAttribute("cx", String(this.predictionCache.cueBallEnd.x));
-          cueBallEndMarker.setAttribute("cy", String(this.predictionCache.cueBallEnd.y));
-          // Color based on whether it's a good position (not near pockets = safer)
-          const cueEndX = this.predictionCache.cueBallEnd.x;
-          const cueEndY = this.predictionCache.cueBallEnd.y;
-          let nearPocket = false;
-          if (this.context.pockets) {
-            for (const pocket of this.context.pockets) {
-              const dx = cueEndX - pocket.position.x;
-              const dy = cueEndY - pocket.position.y;
-              if (Math.sqrt(dx*dx + dy*dy) < 0.08) { // Within 8cm of pocket
-                nearPocket = true;
-                break;
-              }
-            }
-          }
-          cueBallEndMarker.setAttribute("stroke", nearPocket ? "#ff4444" : "#44ff44");
-          cueBallEndMarker.setAttribute("opacity", "0.8");
-        } else {
-          cueBallEndMarker.style.display = "none";
-        }
-        
-        targetLine.style.display = "none";
-        deflectLine.style.display = "none";
-        lowPowerLabel.style.display = "none";
-        lowPowerGhost.style.display = "none";
-        
-      } else {
-        // ========== NORMAL MODE ==========
-        // Simple guides - line to first wall/ball, ghost circle, immediate directions only
-        // Only show ball hit prediction if we have valid lookup data for this power level
-        
-        guidePath.style.display = "none"; // Never use polyline for normal mode
-        guideLine.style.display = "";
+      // Simple guides - line to first wall/ball, ghost circle, immediate directions only
+      // Only show ball hit prediction if we have valid lookup data for this power level
+      
+      guidePath.style.display = "none"; // Never use polyline
+      guideLine.style.display = "";
         guideLine.setAttribute("x1", String(ballX));
         guideLine.setAttribute("y1", String(ballY));
         hackerInLabel.style.display = "none";
@@ -2879,7 +2398,7 @@ export class Terminal extends Middleware<ClientBilliardContext> {
           ghostBall.setAttribute("cx", String(guideEndX));
           ghostBall.setAttribute("cy", String(guideEndY));
           ghostBall.setAttribute("r", String(ghostBallVisualRadius));
-          ghostBall.setAttribute("stroke", (isChargingPower && !willReachTarget) ? "#ff6666" : lineColor);
+          ghostBall.setAttribute("stroke", lineColor);
           
           // Target ball direction - use lookup direction and lookup SPEED for line length
           // The lookup table has accurate speeds measured from actual physics simulation
@@ -3014,32 +2533,26 @@ export class Terminal extends Middleware<ClientBilliardContext> {
           ghostBall.setAttribute("cx", String(guideEndX));
           ghostBall.setAttribute("cy", String(guideEndY));
           ghostBall.setAttribute("r", String(ghostBallVisualRadius));
-          ghostBall.setAttribute("stroke", (isChargingPower && !willReachTarget) ? "#ff6666" : lineColor);
+          ghostBall.setAttribute("stroke", lineColor);
           
-          // Calculate reflection direction
+          // Calculate reflection direction geometrically based on which wall was hit
           let reflectDirX = shotDx;
           let reflectDirY = shotDy;
           
-          const wallBounce = this.predictionCache.firstWallBounce;
-          if (wallBounce && wallBounce.dirAfter) {
-            reflectDirX = wallBounce.dirAfter.x;
-            reflectDirY = wallBounce.dirAfter.y;
-          } else {
-            const table = this.context.table;
-            if (table) {
-              const w = table.width / 2;
-              const h = table.height / 2;
-              const distToRight = Math.abs(guideEndX - w);
-              const distToLeft = Math.abs(guideEndX + w);
-              const distToTop = Math.abs(guideEndY - h);
-              const distToBottom = Math.abs(guideEndY + h);
-              const minXDist = Math.min(distToRight, distToLeft);
-              const minYDist = Math.min(distToTop, distToBottom);
-              if (minXDist < minYDist) {
-                reflectDirX = -shotDx;
-              } else {
-                reflectDirY = -shotDy;
-              }
+          const table = this.context.table;
+          if (table) {
+            const w = table.width / 2;
+            const h = table.height / 2;
+            const distToRight = Math.abs(guideEndX - w);
+            const distToLeft = Math.abs(guideEndX + w);
+            const distToTop = Math.abs(guideEndY - h);
+            const distToBottom = Math.abs(guideEndY + h);
+            const minXDist = Math.min(distToRight, distToLeft);
+            const minYDist = Math.min(distToTop, distToBottom);
+            if (minXDist < minYDist) {
+              reflectDirX = -shotDx;
+            } else {
+              reflectDirY = -shotDy;
             }
           }
           
@@ -3084,28 +2597,8 @@ export class Terminal extends Middleware<ClientBilliardContext> {
           deflectLine.style.display = "none";
           hackerTargetPath.style.display = "none";
           cueBallEndMarker.style.display = "none";
-          lowPowerLabel.style.display = "none";
-          lowPowerGhost.style.display = "none";
         }
-      }
 
-      // Store prediction data for debugging
-      if (hitType === 'ball' && hitBallPos) {
-        const nx = hitBallPos.x - guideEndX;
-        const ny = hitBallPos.y - guideEndY;
-        const nLen = Math.sqrt(nx * nx + ny * ny);
-        
-        if (nLen > 0.0001) {
-            let normX = nx / nLen;
-            let normY = ny / nLen;
-            
-            if (this.predictionCache.targetBallDir) {
-              normX = this.predictionCache.targetBallDir.x;
-              normY = this.predictionCache.targetBallDir.y;
-            }
-        }
-      }
-      
       // Cue dimensions
       const cueLength = 0.6;
       const minGap = 0.02;
