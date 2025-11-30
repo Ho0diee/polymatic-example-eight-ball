@@ -198,7 +198,7 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     this.context.opponentAiming = false;
     this.context.opponentPower = 0;
     
-    // Sync ball positions from server before applying shot (ensures all clients start from same state)
+    // Sync ball positions from server (these are now PRE-physics positions)
     if (data.ballPositions && this.context.balls) {
       for (const bp of data.ballPositions) {
         const ball = this.context.balls.find(b => b.key === bp.key);
@@ -209,38 +209,10 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
       }
     }
     
-    // Set spectatingShot flag so CueShot shows the cue
-    (this.context as any).spectatingShot = true;
-    
-    // Store the shot data and show cue strike animation before starting physics
+    // Find cue ball and apply shot locally - physics starts immediately
     const cueBall = this.context.balls?.find(b => b.color === 'white');
     if (cueBall && data.visibleShot) {
-      // Set opponent aim to match shot direction for cue display
-      const shotMag = Math.sqrt(data.visibleShot.x * data.visibleShot.x + data.visibleShot.y * data.visibleShot.y);
-      if (shotMag > 0) {
-        // Aim vector points opposite to shot direction (cue is behind ball)
-        this.context.opponentAim = { 
-          x: -data.visibleShot.x / shotMag, 
-          y: -data.visibleShot.y / shotMag 
-        };
-        // Set power to show pullback then strike
-        this.context.opponentPower = 0.8;
-        (this.context as any).spectatingShot = true;
-      }
-      
-      // Brief delay to show cue position, then animate strike and start physics
-      setTimeout(() => {
-        // Animate cue forward (reduce power to 0)
-        this.context.opponentPower = 0;
-        
-        // After strike animation, start physics
-        setTimeout(() => {
-          (this.context as any).spectatingShot = false;
-          this.context.opponentAiming = false;
-          // Now trigger the actual physics
-          this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
-        }, 100); // 100ms for strike animation
-      }, 150); // 150ms to show pulled back cue
+      this.emit("cue-shot", { ball: cueBall, shot: data.visibleShot });
     }
   };
   

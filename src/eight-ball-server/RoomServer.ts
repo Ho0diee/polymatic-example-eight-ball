@@ -9,7 +9,6 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   inactiveRoomTimeout: any;
   lastUpdateTime: number = 0;
   updateInterval: number = 50; // Send updates every 50ms (20 times per second) instead of every frame
-  pendingShot: { x: number; y: number } | null = null;
 
   constructor() {
     super();
@@ -56,8 +55,21 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
 
       socket.on("cue-shot", (data) => {
         if (this.context.turn.current !== player.turn) return;
-        // Store shot for broadcasting
-        this.pendingShot = data.shot;
+        
+        // Capture ball positions BEFORE physics starts
+        const ballPositions = this.context.balls?.map(b => ({
+          key: b.key,
+          x: b.position.x,
+          y: b.position.y
+        })) || [];
+        
+        // Broadcast to OTHER clients immediately (before local physics)
+        socket.broadcast.emit("shot-broadcast", {
+          visibleShot: data.shot,
+          ballPositions: ballPositions
+        });
+        
+        // Now apply physics locally on server
         this.emit("cue-shot", data);
 
         this.extendRoomLease();
@@ -116,20 +128,8 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   }
 
   handleShotStart = () => {
-    // Broadcast shot to all clients so they can run physics locally
-    if (this.pendingShot) {
-      const ballPositions = this.context.balls?.map(b => ({
-        key: b.key,
-        x: b.position.x,
-        y: b.position.y
-      })) || [];
-      
-      this.context.io.emit("shot-broadcast", {
-        visibleShot: this.pendingShot,
-        ballPositions: ballPositions
-      });
-      this.pendingShot = null;
-    }
+    // Shot broadcast now happens immediately in the socket handler before physics
+    // This ensures opponents get pre-physics ball positions
   };
 
   sendMovingObjects = () => {
