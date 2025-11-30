@@ -133,7 +133,7 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
   };
 
   sendMovingObjects = () => {
-    const { balls, shotInProgress, gameOver, gameStarted, turn, winner, turnStartTime, players } = this.context;
+    const { balls, shotInProgress, gameOver, gameStarted, turn, winner, turnStartTime, players, pocketedBalls } = this.context;
     // Only send essential ball data to reduce payload size
     const compactBalls = balls?.map(b => ({
       type: b.type,
@@ -142,8 +142,18 @@ export class RoomServer extends Middleware<ServerBilliardContext> {
       color: b.color,
       radius: b.radius
     }));
+    // Also send pocketed balls and player color assignments for UI sync
+    const compactPocketed = pocketedBalls?.map(b => ({
+      type: b.type,
+      key: b.key,
+      color: b.color,
+      radius: b.radius
+    })) || [];
+    const playerColors = players?.map(p => ({ id: p.id, color: p.color })) || [];
     this.context.io.emit("room-update", {
       balls: compactBalls,
+      pocketedBalls: compactPocketed,
+      playerColors,
       players,
       gameStarted,
       shotInProgress,

@@ -165,6 +165,14 @@ export class RoomClient extends Middleware<ClientBilliardContext> {
     if (!wasGameStarted && data.gameStarted) {
       this.emit("game-start");
     }
+
+    // Show winner and end game if gameOver
+    if (data.gameOver && data.winner) {
+      const winnerPlayer = (data.players || []).find(p => p.id === data.winner);
+      const winnerName = winnerPlayer ? (winnerPlayer.id === this.context.auth.id ? "You" : "Opponent") : "Player";
+      alert(`${winnerName} wins!`);
+      // Optionally, show a modal or update UI here
+    }
   };
 
   handleGameStart = () => {

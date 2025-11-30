@@ -2667,4 +2667,47 @@ export class Terminal extends Middleware<ClientBilliardContext> {
   dataset = Dataset.create<Ball | Rail | Pocket | CueStick | Table>({
     key: (data) => data.key,
   });
+
+  updateScorecardUI() {
+    // Get latest pocketed balls and player colors from context
+    const pocketedBalls = this.context.pocketedBalls || [];
+    const playerColors = this.context.playerColors || [];
+    const players = this.context.players || [];
+    // Clear scorecard
+    while (this.scorecardGroup.firstChild) {
+      this.scorecardGroup.removeChild(this.scorecardGroup.firstChild);
+    }
+    // For each player, show their color and pocketed balls
+    players.forEach((player, idx) => {
+      const color = playerColors.find(p => p.id === player.id)?.color || player.color;
+      const playerLabel = document.createElementNS(SVG_NS, "text");
+      playerLabel.setAttribute("x", String(0.1));
+      playerLabel.setAttribute("y", String(0.05 + idx * 0.06));
+      playerLabel.setAttribute("font-size", "0.04");
+      playerLabel.setAttribute("fill", color === 'solid' ? '#4caf50' : color === 'stripe' ? '#f44336' : '#fff');
+      playerLabel.textContent = `Player ${idx + 1}: ${color || 'Unassigned'}`;
+      this.scorecardGroup.appendChild(playerLabel);
+      // Show pocketed balls for this player
+      let px = 0.25;
+      pocketedBalls.filter(b => {
+        if (color === 'solid') return b.color && b.color.endsWith('-solid');
+        if (color === 'stripe') return b.color && b.color.endsWith('-stripe');
+        return false;
+      }).forEach((ball, bidx) => {
+        const ballCircle = document.createElementNS(SVG_NS, "circle");
+        ballCircle.setAttribute("cx", String(px + bidx * 0.04));
+        ballCircle.setAttribute("cy", String(0.05 + idx * 0.06));
+        ballCircle.setAttribute("r", "0.018");
+        ballCircle.setAttribute("fill", ball.color && ball.color.startsWith('eight-ball') ? '#222' : color === 'solid' ? '#4caf50' : '#f44336');
+        ballCircle.setAttribute("stroke", "#fff");
+        ballCircle.setAttribute("stroke-width", "0.004");
+        this.scorecardGroup.appendChild(ballCircle);
+      });
+    });
+  }
+
+  // Call updateScorecardUI whenever context updates
+  handleContextUpdate() {
+    this.updateScorecardUI();
+  }
 }
